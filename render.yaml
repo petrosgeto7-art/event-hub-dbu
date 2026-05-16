@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: eventhub-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: CORS_ORIGIN
+        value: https://event-hub-dbu.vercel.app # Replace with your actual frontend Vercel URL
+      - key: FRONTEND_URL
+        value: https://event-hub-dbu.vercel.app # Replace with your actual frontend Vercel URL
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: DATABASE_URL
+        sync: false # Provide this manually in Render dashboard
+      - key: CHAPA_SECRET_KEY
+        sync: false # Provide this manually in Render dashboard
