@@ -123,6 +123,7 @@ async function main() {
       location: 'CS Building, Lab 301',
       capacity: 50, tags: ['AI', 'ML', 'Python', 'Workshop'],
       isFeatured: true, status: 'PUBLISHED' as const, isFree: false, price: 150,
+      bannerImage: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=800&h=400&fit=crop',
     },
     {
       title: 'DBU Annual Science Week 2026',
@@ -132,6 +133,7 @@ async function main() {
       location: 'Main Auditorium',
       capacity: 500, tags: ['Science', 'Research', 'Innovation'],
       isFeatured: true, status: 'PUBLISHED' as const, isFree: true, price: 0,
+      bannerImage: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=800&h=400&fit=crop',
     },
     {
       title: 'Full-Stack Web Development Bootcamp',
@@ -141,6 +143,7 @@ async function main() {
       location: 'Innovation Hub, Room 205',
       capacity: 40, tags: ['React', 'Node.js', 'Web Dev'],
       isFeatured: true, status: 'PUBLISHED' as const, isFree: false, price: 200,
+      bannerImage: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=800&h=400&fit=crop',
     },
     {
       title: 'Inter-Department Football Tournament',
@@ -150,6 +153,7 @@ async function main() {
       location: 'DBU Sports Field',
       capacity: 300, tags: ['Football', 'Sports', 'Tournament'],
       isFeatured: false, status: 'PUBLISHED' as const, isFree: true, price: 0,
+      bannerImage: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&h=400&fit=crop',
     },
     {
       title: 'Cybersecurity CTF Challenge',
@@ -159,6 +163,7 @@ async function main() {
       location: 'CS Building, Lab 201',
       capacity: 30, tags: ['Cybersecurity', 'CTF', 'Hacking'],
       isFeatured: false, status: 'PUBLISHED' as const, isFree: false, price: 100,
+      bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&h=400&fit=crop',
     },
     {
       title: 'Campus Cultural Night',
@@ -168,6 +173,7 @@ async function main() {
       location: 'Campus Open Ground',
       capacity: 1000, tags: ['Culture', 'Music', 'Dance', 'Food'],
       isFeatured: true, status: 'PUBLISHED' as const, isFree: true, price: 0,
+      bannerImage: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=800&h=400&fit=crop',
     },
     {
       title: 'Career Fair & Job Expo 2026',
@@ -177,6 +183,7 @@ async function main() {
       location: 'Main Campus Hall',
       capacity: 800, tags: ['Career', 'Jobs', 'Networking'],
       isFeatured: true, status: 'PUBLISHED' as const, isFree: true, price: 0,
+      bannerImage: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&h=400&fit=crop',
     },
     {
       title: 'Entrepreneurship & Startup Pitch',
@@ -186,6 +193,7 @@ async function main() {
       location: 'Business School Auditorium',
       capacity: 200, tags: ['Startup', 'Business', 'Pitch'],
       isFeatured: false, status: 'PUBLISHED' as const, isFree: false, price: 50,
+      bannerImage: 'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=800&h=400&fit=crop',
     },
   ];
 

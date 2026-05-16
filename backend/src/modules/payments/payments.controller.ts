@@ -19,10 +19,43 @@ export const paymentsController = {
         return res.status(400).json({ success: false, message: 'Payment verification failed' });
       }
 
-      // Update Registration status
+      // Get current commission rate
+      const config = await prisma.commissionConfig.findUnique({ where: { id: 'default' } });
+      const rate = config ? config.rate : 10.0;
+
+      // Update Registration status and fetch event details
       const registration = await prisma.registration.update({
         where: { txRef: tx_ref },
         data: { paymentStatus: 'PAID', status: 'CONFIRMED' },
+        include: { event: true },
+      });
+
+      // Calculate commissions
+      const price = registration.event.price || 0;
+      const adminAmount = price * (rate / 100);
+      const vendorAmount = price - adminAmount;
+
+      // Record commission
+      await prisma.commission.create({
+        data: {
+          registrationId: registration.id,
+          eventId: registration.eventId,
+          vendorId: registration.event.organizerId,
+          totalAmount: price,
+          commissionRate: rate,
+          adminAmount,
+          vendorAmount,
+        }
+      });
+
+      // Update Registration with commission details
+      await prisma.registration.update({
+        where: { id: registration.id },
+        data: {
+          commissionRate: rate,
+          adminAmount,
+          vendorAmount,
+        }
       });
 
       // Update Event Registration Count

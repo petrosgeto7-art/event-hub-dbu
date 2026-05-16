@@ -24,6 +24,7 @@ import notificationsRoutes from './modules/notifications/notifications.routes';
 import categoriesRoutes from './modules/categories/categories.routes';
 import certificatesRoutes from './modules/certificates/certificates.routes';
 import paymentsRoutes from './modules/payments/payments.routes';
+import commissionsRoutes from './modules/commissions/commissions.routes';
 
 const app = express();
 const httpServer = createServer(app);
@@ -76,6 +77,7 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/certificates', certificatesRoutes);
 app.use('/api/payments', paymentsRoutes);
+app.use('/api/commissions', commissionsRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

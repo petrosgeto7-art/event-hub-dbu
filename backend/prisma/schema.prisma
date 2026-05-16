@@ -106,6 +106,7 @@ model User {
   clubPresidency  Club[]           @relation("ClubPresident")
   recommendations Recommendation[]
   orders          Order[]
+  earnedCommissions Commission[]
 
   @@index([universityId])
   @@index([email])
@@ -197,6 +198,7 @@ model Event {
   recommendations Recommendation[]
   ticketTiers     TicketTier[]
   orders          Order[]
+  commissions     Commission[]
 
   @@index([universityId, status])
   @@index([date, status])
@@ -248,6 +250,9 @@ model Registration {
   qrCode        String?
   qrToken       String?            @unique
   qrExpiry      DateTime?
+  commissionRate Float?             // The % rate applied
+  adminAmount   Float?              // Cut for admin
+  vendorAmount  Float?              // Cut for vendor
   registeredAt  DateTime           @default(now())
   cancelledAt   DateTime?
 
@@ -256,6 +261,7 @@ model Registration {
   order      Order?      @relation(fields: [orderId], references: [id])
   ticketTier TicketTier? @relation(fields: [ticketTierId], references: [id])
   attendance Attendance?
+  commission Commission?
 
   @@index([eventId])
   @@index([userId])
@@ -458,3 +464,36 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+// ============================================================
+// REVENUE & COMMISSIONS
+// ============================================================
+
+model CommissionConfig {
+  id        String   @id @default("default")
+  rate      Float    @default(10.0) // Percentage (e.g., 10 for 10%)
+  updatedAt DateTime @updatedAt
+
+  @@map("commission_config")
+}
+
+model Commission {
+  id             String   @id @default(uuid())
+  registrationId String   @unique
+  eventId        String
+  vendorId       String
+  totalAmount    Float
+  commissionRate Float
+  adminAmount    Float
+  vendorAmount   Float
+  createdAt      DateTime @default(now())
+
+  registration   Registration @relation(fields: [registrationId], references: [id])
+  event          Event        @relation(fields: [eventId], references: [id])
+  vendor         User         @relation(fields: [vendorId], references: [id])
+
+  @@index([eventId])
+  @@index([vendorId])
+  @@map("commissions")
+}
+
