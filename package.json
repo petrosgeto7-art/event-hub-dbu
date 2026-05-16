@@ -1,0 +1,21 @@
+{
+  "name": "eventhub-dbu",
+  "version": "1.0.0",
+  "private": true,
+  "description": "EventHub DBU — AI-Powered Campus Event Management Platform",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "cd backend && npm run dev",
+    "dev:web": "cd frontend && npm run dev",
+    "build": "npm run build:server && npm run build:web",
+    "build:server": "cd backend && npm run build",
+    "build:web": "cd frontend && npm run build",
+    "db:migrate": "cd backend && npx prisma migrate dev",
+    "db:seed": "cd backend && npx prisma db seed",
+    "db:studio": "cd backend && npx prisma studio",
+    "lint": "concurrently \"cd backend && npm run lint\" \"cd frontend && npm run lint\""
+  },
+  "keywords": ["event-management", "saas", "university", "campus"],
+  "author": "EventHub DBU",
+  "license": "MIT"
+}

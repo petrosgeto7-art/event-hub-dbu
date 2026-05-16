@@ -1,0 +1,460 @@
+// ============================================================
+// EventHub DBU — Prisma Schema
+// AI-Powered Campus Event Management Platform
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  ORGANIZER
+  STUDENT
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  CONFIRMED
+  WAITLISTED
+  CANCELLED
+}
+
+enum NotificationType {
+  EVENT_REMINDER
+  REGISTRATION_CONFIRMED
+  EVENT_UPDATE
+  ATTENDANCE_MARKED
+  CERTIFICATE_READY
+  SYSTEM
+  ACHIEVEMENT
+}
+
+// ============================================================
+// USER & UNIVERSITY
+// ============================================================
+
+model University {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  logo      String?
+  domain    String?
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users  User[]
+  events Event[]
+  clubs  Club[]
+
+  @@map("universities")
+}
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  password         String
+  firstName        String
+  lastName         String
+  role             Role      @default(STUDENT)
+  avatar           String?
+  department       String?
+  interests        String[]  @default([])
+  bio              String?
+  phone            String?
+  studentId        String?
+  streakCount      Int       @default(0)
+  badges           String[]  @default([])
+  isVerified       Boolean   @default(false)
+  isActive         Boolean   @default(true)
+  lastLoginAt      DateTime?
+  universityId     String?
+  hasPaidWorkspace Boolean   @default(false)
+  workspaceTxRef   String?   @unique
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  university      University?      @relation(fields: [universityId], references: [id])
+  organizedEvents Event[]          @relation("EventOrganizer")
+  registrations   Registration[]
+  attendance      Attendance[]
+  feedback        Feedback[]
+  bookmarks       Bookmark[]
+  certificates    Certificate[]
+  notifications   Notification[]
+  refreshTokens   RefreshToken[]
+  auditLogs       AuditLog[]       @relation("AuditUser")
+  clubPresidency  Club[]           @relation("ClubPresident")
+  recommendations Recommendation[]
+  orders          Order[]
+
+  @@index([universityId])
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// ============================================================
+// CLUBS & CATEGORIES
+// ============================================================
+
+model Club {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique
+  description  String?
+  logo         String?
+  isActive     Boolean  @default(true)
+  universityId String
+  presidentId  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  university University @relation(fields: [universityId], references: [id])
+  president  User?      @relation("ClubPresident", fields: [presidentId], references: [id])
+  events     Event[]
+
+  @@index([universityId])
+  @@map("clubs")
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  icon        String?
+  color       String?
+  description String?
+  createdAt   DateTime @default(now())
+
+  events Event[]
+
+  @@map("categories")
+}
+
+// ============================================================
+// EVENTS
+// ============================================================
+
+model Event {
+  id                   String      @id @default(uuid())
+  title                String
+  slug                 String      @unique
+  description          String
+  date                 DateTime
+  startTime            String
+  endTime              String
+  location             String?
+  isOnline             Boolean     @default(false)
+  meetingUrl           String?
+  bannerImage          String?
+  capacity             Int         @default(100)
+  registeredCount      Int         @default(0)
+  status               EventStatus @default(DRAFT)
+  isFree               Boolean     @default(true)
+  price                Float       @default(0)
+  tags                 String[]    @default([])
+  registrationDeadline DateTime?
+  isFeatured           Boolean     @default(false)
+  viewCount            Int         @default(0)
+  universityId         String?
+  organizerId          String
+  clubId               String?
+  categoryId           String?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  university      University?      @relation(fields: [universityId], references: [id])
+  organizer       User             @relation("EventOrganizer", fields: [organizerId], references: [id])
+  club            Club?            @relation(fields: [clubId], references: [id])
+  category        Category?        @relation(fields: [categoryId], references: [id])
+  speakers        EventSpeaker[]
+  schedules       EventSchedule[]
+  registrations   Registration[]
+  attendance      Attendance[]
+  feedback        Feedback[]
+  bookmarks       Bookmark[]
+  certificates    Certificate[]
+  recommendations Recommendation[]
+  ticketTiers     TicketTier[]
+  orders          Order[]
+
+  @@index([universityId, status])
+  @@index([date, status])
+  @@index([organizerId])
+  @@index([categoryId])
+  @@index([status])
+  @@map("events")
+}
+
+model EventSpeaker {
+  id      String  @id @default(uuid())
+  name    String
+  title   String?
+  bio     String?
+  avatar  String?
+  eventId String
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("event_speakers")
+}
+
+model EventSchedule {
+  id          String  @id @default(uuid())
+  title       String
+  description String?
+  startTime   String
+  endTime     String
+  eventId     String
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("event_schedules")
+}
+
+// ============================================================
+// REGISTRATION & ATTENDANCE
+// ============================================================
+
+model Registration {
+  id            String             @id @default(uuid())
+  userId        String
+  eventId       String
+  orderId       String?
+  ticketTierId  String?
+  status        RegistrationStatus @default(CONFIRMED)
+  paymentStatus String             @default("FREE") // FREE, PENDING, PAID
+  txRef         String?            @unique
+  qrCode        String?
+  qrToken       String?            @unique
+  qrExpiry      DateTime?
+  registeredAt  DateTime           @default(now())
+  cancelledAt   DateTime?
+
+  user       User        @relation(fields: [userId], references: [id])
+  event      Event       @relation(fields: [eventId], references: [id])
+  order      Order?      @relation(fields: [orderId], references: [id])
+  ticketTier TicketTier? @relation(fields: [ticketTierId], references: [id])
+  attendance Attendance?
+
+  @@index([eventId])
+  @@index([userId])
+  @@map("registrations")
+}
+
+// ============================================================
+// MULTI-TIER TICKETING & ORDERS
+// ============================================================
+
+model TicketTier {
+  id          String  @id @default(uuid())
+  name        String // e.g. "Early Bird", "VIP"
+  description String?
+  price       Float   @default(0)
+  capacity    Int
+  soldCount   Int     @default(0)
+  eventId     String
+
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orders        OrderItem[]
+  registrations Registration[]
+
+  @@map("ticket_tiers")
+}
+
+model Order {
+  id          String   @id @default(uuid())
+  userId      String
+  eventId     String
+  totalAmount Float
+  status      String   @default("PENDING") // PENDING, PAID, CANCELLED
+  txRef       String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id])
+  event         Event          @relation(fields: [eventId], references: [id])
+  items         OrderItem[]
+  registrations Registration[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id           String @id @default(uuid())
+  orderId      String
+  ticketTierId String
+  quantity     Int
+  pricePerItem Float
+
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ticketTier TicketTier @relation(fields: [ticketTierId], references: [id])
+
+  @@map("order_items")
+}
+
+model Attendance {
+  id             String   @id @default(uuid())
+  registrationId String   @unique
+  userId         String
+  eventId        String
+  checkedInAt    DateTime @default(now())
+  method         String   @default("QR_SCAN")
+
+  registration Registration @relation(fields: [registrationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  event        Event        @relation(fields: [eventId], references: [id])
+
+  @@unique([userId, eventId])
+  @@index([eventId])
+  @@map("attendance")
+}
+
+// ============================================================
+// FEEDBACK & BOOKMARKS
+// ============================================================
+
+model Feedback {
+  id        String   @id @default(uuid())
+  userId    String
+  eventId   String
+  rating    Int // 1-5
+  comment   String?
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@unique([userId, eventId])
+  @@index([eventId])
+  @@map("feedback")
+}
+
+model Bookmark {
+  id        String   @id @default(uuid())
+  userId    String
+  eventId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@unique([userId, eventId])
+  @@map("bookmarks")
+}
+
+// ============================================================
+// CERTIFICATES
+// ============================================================
+
+model Certificate {
+  id               String   @id @default(uuid())
+  userId           String
+  eventId          String
+  certificateUrl   String?
+  verificationCode String   @unique
+  issuedAt         DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@unique([userId, eventId])
+  @@map("certificates")
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType @default(SYSTEM)
+  isRead    Boolean          @default(false)
+  data      Json?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================================
+// AI RECOMMENDATIONS
+// ============================================================
+
+model Recommendation {
+  id        String   @id @default(uuid())
+  userId    String
+  eventId   String
+  score     Float
+  reason    String?
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@unique([userId, eventId])
+  @@index([userId, score])
+  @@map("recommendations")
+}
+
+// ============================================================
+// SECURITY & AUDIT
+// ============================================================
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User? @relation("AuditUser", fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity, action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
