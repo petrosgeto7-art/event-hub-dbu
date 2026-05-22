@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CheckCircle2, XCircle, Loader2, QrCode } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, QrCode, AlertTriangle } from 'lucide-react';
 
 export default function ScannerPage() {
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -20,7 +20,7 @@ export default function ScannerPage() {
   const { data: myEvents, isLoading: eventsLoading } = useQuery({
     queryKey: ['my-created-events'],
     queryFn: async () => {
-      const res = await api.get('/events/my-events');
+      const res = await api.get('/events/my/events');
       // Only show events that are today or upcoming (simplified for MVP)
       return res.data.data;
     },
@@ -57,36 +57,53 @@ export default function ScannerPage() {
   });
 
   useEffect(() => {
+    let scanner = scannerRef.current;
+    
     if (isScanning && selectedEventId) {
-      scannerRef.current = new Html5QrcodeScanner(
+      const newScanner = new Html5QrcodeScanner(
         "reader",
-        { fps: 10, qrbox: { width: 250, height: 250 } },
+        { 
+          fps: 30, 
+          qrbox: { width: 250, height: 250 },
+          videoConstraints: { facingMode: "environment" },
+          rememberLastUsedCamera: true
+        },
         false
       );
+      scannerRef.current = newScanner;
 
-      scannerRef.current.render(
+      newScanner.render(
         (decodedText) => {
           // Pause scanning temporarily while processing
-          scannerRef.current?.pause(true);
+          newScanner.pause(true);
           
-          scanMutation.mutate(decodedText, {
+          let tokenToVerify = decodedText;
+          try {
+            const parsed = JSON.parse(decodedText);
+            if (parsed.token) tokenToVerify = parsed.token;
+          } catch (e) {
+            // Fallback
+          }
+          
+          scanMutation.mutate(tokenToVerify, {
             onSettled: () => {
-              // Resume scanning after 2 seconds
               setTimeout(() => {
-                scannerRef.current?.resume();
-              }, 2000);
+                try { newScanner.resume(); } catch (e) {}
+              }, 800);
             }
           });
         },
-        (error) => {
-          // Ignore frequent failure to find QR code
-        }
+        () => {}
       );
     }
 
     return () => {
       if (scannerRef.current) {
-        scannerRef.current.clear().catch(console.error);
+        try {
+          scannerRef.current.clear().catch(() => {});
+        } catch (error) {
+          // Ignore clear errors on unmount
+        }
       }
     };
   }, [isScanning, selectedEventId]);
@@ -154,22 +171,55 @@ export default function ScannerPage() {
                   <p className="text-lg font-medium">Verifying ticket...</p>
                 </div>
               ) : lastScanResult ? (
-                <div className={`flex flex-col items-center ${lastScanResult.status === 'success' ? 'text-green-500' : 'text-destructive'}`}>
+                <div className={`flex flex-col items-center ${
+                  lastScanResult.status === 'success' ? 'text-green-500' : 
+                  lastScanResult.message === 'Attendance already recorded' ? 'text-orange-500' : 
+                  'text-destructive'
+                }`}>
                   {lastScanResult.status === 'success' ? (
                     <CheckCircle2 className="w-20 h-20 mb-4" />
+                  ) : lastScanResult.message === 'Attendance already recorded' ? (
+                    <AlertTriangle className="w-20 h-20 mb-4" />
                   ) : (
                     <XCircle className="w-20 h-20 mb-4" />
                   )}
                   <h3 className="text-2xl font-bold mb-2">
-                    {lastScanResult.status === 'success' ? 'Access Granted' : 'Access Denied'}
+                    {lastScanResult.status === 'success' ? 'Access Granted' : lastScanResult.message}
                   </h3>
-                  <p className="text-white mb-6 text-lg">{lastScanResult.message}</p>
+                  {lastScanResult.status === 'success' && (
+                    <p className="text-green-400 font-bold mb-6 text-sm tracking-widest uppercase">TICKET VALIDATED</p>
+                  )}
+                  {lastScanResult.message === 'Attendance already recorded' && (
+                    <p className="text-orange-400 font-bold mb-6 text-sm tracking-widest uppercase">ALREADY SCANNED</p>
+                  )}
+                  {lastScanResult.message === 'This event has already ended.' && (
+                    <p className="text-red-500 font-bold mb-6 text-sm tracking-widest uppercase">EXPIRED TICKET</p>
+                  )}
+                  {lastScanResult.message === 'Ticket scanning opens 15 minutes before the event starts.' && (
+                    <p className="text-yellow-500 font-bold mb-6 text-sm tracking-widest uppercase">TOO EARLY (WAIT)</p>
+                  )}
+                  {lastScanResult.message === 'This ticket is for a different event!' && (
+                    <p className="text-red-500 font-bold mb-6 text-sm tracking-widest uppercase">WRONG EVENT</p>
+                  )}
+                  {lastScanResult.message === 'Registration is not confirmed' && (
+                    <p className="text-red-500 font-bold mb-6 text-sm tracking-widest uppercase">NOT CONFIRMED</p>
+                  )}
+                  {lastScanResult.status === 'error' && 
+                   !['Attendance already recorded', 'This event has already ended.', 'Ticket scanning opens 15 minutes before the event starts.', 'This ticket is for a different event!', 'Registration is not confirmed'].includes(lastScanResult.message) && (
+                    <p className="text-red-500 font-bold mb-6 text-sm tracking-widest uppercase">ACCESS DENIED</p>
+                  )}
                   
                   {lastScanResult.user && (
-                    <div className="bg-white/10 p-4 rounded-xl text-left w-full">
-                      <p className="text-sm text-muted-foreground">Attendee</p>
-                      <p className="font-bold text-white text-lg">{lastScanResult.user.firstName} {lastScanResult.user.lastName}</p>
-                      <p className="text-sm text-gray-300">{lastScanResult.user.studentId || 'Student'}</p>
+                    <div className="bg-muted p-4 rounded-xl w-full border border-border mt-4 flex justify-between items-center text-left">
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Attendee Name</p>
+                        <p className="font-bold text-foreground text-xl">{lastScanResult.user.firstName} {lastScanResult.user.lastName}</p>
+                        <p className="text-sm text-muted-foreground">{lastScanResult.user.studentId || 'Student'}</p>
+                      </div>
+                      <div className="text-right">
+                         <p className="text-sm text-muted-foreground mb-1">Quantity</p>
+                         <p className="font-bold text-primary text-xl">1 Ticket</p>
+                      </div>
                     </div>
                   )}
                 </div>

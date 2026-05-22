@@ -92,6 +92,9 @@ model User {
   workspaceTxRef   String?   @unique
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+  cbeAccount       String?
+  telebirrAccount  String?
+  chapaSubaccountId String?
 
   university      University?      @relation(fields: [universityId], references: [id])
   organizedEvents Event[]          @relation("EventOrganizer")
@@ -253,6 +256,7 @@ model Registration {
   commissionRate Float?             // The % rate applied
   adminAmount   Float?              // Cut for admin
   vendorAmount  Float?              // Cut for vendor
+  refundAmount  Float?              // Amount refunded to user on cancellation
   registeredAt  DateTime           @default(now())
   cancelledAt   DateTime?
 

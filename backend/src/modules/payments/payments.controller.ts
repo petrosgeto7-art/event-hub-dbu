@@ -12,8 +12,7 @@ export const paymentsController = {
     try {
       const { tx_ref } = req.params;
 
-      // Check Chapa API
-      const isVerified = await chapaService.verify(tx_ref);
+      const isVerified = await chapaService.verify(tx_ref as string);
 
       if (!isVerified) {
         return res.status(400).json({ success: false, message: 'Payment verification failed' });
@@ -25,13 +24,13 @@ export const paymentsController = {
 
       // Update Registration status and fetch event details
       const registration = await prisma.registration.update({
-        where: { txRef: tx_ref },
+        where: { txRef: tx_ref as string },
         data: { paymentStatus: 'PAID', status: 'CONFIRMED' },
         include: { event: true },
       });
 
       // Calculate commissions
-      const price = registration.event.price || 0;
+      const price = registration.event!.price || 0;
       const adminAmount = price * (rate / 100);
       const vendorAmount = price - adminAmount;
 
@@ -40,7 +39,7 @@ export const paymentsController = {
         data: {
           registrationId: registration.id,
           eventId: registration.eventId,
-          vendorId: registration.event.organizerId,
+          vendorId: registration.event!.organizerId,
           totalAmount: price,
           commissionRate: rate,
           adminAmount,
@@ -77,14 +76,14 @@ export const paymentsController = {
     try {
       const { tx_ref } = req.params;
 
-      const isVerified = await chapaService.verify(tx_ref);
+      const isVerified = await chapaService.verify(tx_ref as string);
 
       if (!isVerified) {
         return res.status(400).json({ success: false, message: 'Payment verification failed' });
       }
 
       const user = await prisma.user.update({
-        where: { workspaceTxRef: tx_ref },
+        where: { workspaceTxRef: tx_ref as string },
         data: { hasPaidWorkspace: true },
       });
 

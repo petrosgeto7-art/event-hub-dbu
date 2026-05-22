@@ -18,6 +18,7 @@ import {
   Zap, Trophy, BookOpen, Heart, Play
 } from 'lucide-react';
 import { useTranslation } from '@/stores/language-store';
+import { useAuthStore } from '@/stores/auth-store';
 
 const fadeIn = {
   hidden: { opacity: 0, y: 20 },
@@ -31,6 +32,8 @@ const staggerContainer = {
 
 export default function LandingPage() {
   const [showDemo, setShowDemo] = useState(false);
+  const { isAuthenticated, logout, user, isHydrated } = useAuthStore();
+  const dashboardLink = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' ? '/dashboard/admin' : user?.role === 'ORGANIZER' ? '/dashboard/organizer' : '/dashboard/student';
 
   const { data: events } = useQuery({
     queryKey: ['landing-events'],
@@ -116,11 +119,21 @@ export default function LandingPage() {
                     </div>
                   </DialogContent>
                 </Dialog>
-                <Link href="/register">
-                  <Button size="lg" variant="ghost" className="h-14 px-8 text-lg rounded-full hover:bg-white/5 backdrop-blur-md text-muted-foreground">
-                    {t('joinAsOrganizer')}
-                  </Button>
-                </Link>
+                {!isHydrated ? (
+                  <div className="h-14 w-40 animate-pulse bg-white/5 rounded-full" />
+                ) : !isAuthenticated ? (
+                  <Link href="/register">
+                    <Button size="lg" variant="ghost" className="h-14 px-8 text-lg rounded-full hover:bg-white/5 backdrop-blur-md text-muted-foreground">
+                      {t('joinAsOrganizer')}
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link href={dashboardLink}>
+                    <Button size="lg" variant="ghost" className="h-14 px-8 text-lg rounded-full hover:bg-white/5 backdrop-blur-md text-muted-foreground">
+                      Go to Dashboard
+                    </Button>
+                  </Link>
+                )}
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-3xl mx-auto border-t border-white/10 pt-10">
@@ -393,16 +406,36 @@ export default function LandingPage() {
               {t('ctaDescription')}
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/register">
-                <Button size="lg" className="h-14 px-10 text-lg rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_30px_rgba(255,215,0,0.25)]">
-                  {t('ctaButton')}
-                </Button>
-              </Link>
-              <Link href="/login">
-                <Button size="lg" variant="outline" className="h-14 px-10 text-lg rounded-full border-white/20 hover:bg-white/10 bg-black/50 backdrop-blur-md">
-                  {t('signIn')}
-                </Button>
-              </Link>
+              {!isHydrated ? (
+                <>
+                  <div className="h-14 w-40 animate-pulse bg-primary/20 rounded-full" />
+                  <div className="h-14 w-40 animate-pulse bg-white/10 rounded-full" />
+                </>
+              ) : !isAuthenticated ? (
+                <>
+                  <Link href="/register">
+                    <Button size="lg" className="h-14 px-10 text-lg rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_30px_rgba(255,215,0,0.25)]">
+                      {t('ctaButton')}
+                    </Button>
+                  </Link>
+                  <Link href="/login" replace>
+                    <Button size="lg" variant="outline" className="h-14 px-10 text-lg rounded-full border-white/20 hover:bg-white/10 bg-black/50 backdrop-blur-md">
+                      {t('signIn')}
+                    </Button>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link href={dashboardLink}>
+                    <Button size="lg" className="h-14 px-10 text-lg rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_30px_rgba(255,215,0,0.25)]">
+                      Go to Dashboard
+                    </Button>
+                  </Link>
+                  <Button size="lg" variant="outline" onClick={() => logout()} className="h-14 px-10 text-lg rounded-full border-white/20 hover:bg-white/10 bg-black/50 backdrop-blur-md">
+                    Logout
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </section>
@@ -442,9 +475,9 @@ export default function LandingPage() {
             <div>
               <h4 className="font-bold text-foreground mb-4">{t('platform')}</h4>
               <ul className="space-y-3 text-sm text-muted-foreground">
-                <li><Link href="/login" className="hover:text-primary transition-colors">{t('signIn')}</Link></li>
+                <li><Link href="/login" replace className="hover:text-primary transition-colors">{t('signIn')}</Link></li>
                 <li><Link href="/register" className="hover:text-primary transition-colors">{t('createAccount')}</Link></li>
-                <li><Link href="/dashboard/super-admin" className="hover:text-primary transition-colors">{t('adminPanel')}</Link></li>
+                <li><Link href="/dashboard/admin" className="hover:text-primary transition-colors">{t('adminPanel')}</Link></li>
               </ul>
             </div>
           </div>

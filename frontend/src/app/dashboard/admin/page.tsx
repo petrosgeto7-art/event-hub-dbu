@@ -1,14 +1,20 @@
 'use client';
 
+import { useState } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 import { 
   Users, UserCheck, CalendarDays, Activity, 
-  ShieldAlert, UserX, BrainCircuit, TrendingUp, BarChart3, Zap, Banknote, Percent
+  ShieldAlert, UserX, BrainCircuit, TrendingUp, BarChart3, Zap, Banknote, Percent,
+  Download, Loader2
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -28,6 +34,10 @@ const growthData = [
 
 export default function AdminDashboard() {
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
+  const [showRateModal, setShowRateModal] = useState(false);
+  const [newRate, setNewRate] = useState('');
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const { data: commissionsData, isLoading: commLoading } = useQuery({
     queryKey: ['admin-commissions'],
@@ -53,6 +63,77 @@ export default function AdminDashboard() {
     },
   });
 
+  const updateRateMutation = useMutation({
+    mutationFn: async (rate: number) => {
+      const res = await api.put('/commissions/config', { rate });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-commission-config'] });
+      toast.success('Commission rate updated successfully!');
+      setShowRateModal(false);
+      setNewRate('');
+    },
+    onError: () => {
+      toast.error('Failed to update commission rate');
+    },
+  });
+
+  const handleDownloadReport = async () => {
+    try {
+      setIsDownloading(true);
+      const res = await api.get('/analytics/reports/full');
+      const data = res.data.data;
+
+      // Build CSV
+      let csv = 'EventHub DBU - Full Platform Report\n';
+      csv += `Generated At: ${new Date(data.generatedAt).toLocaleString()}\n\n`;
+      csv += `Total Users: ${data.totalUsers}\n`;
+      csv += `Total Events: ${data.totalEvents}\n`;
+      csv += `Total Revenue Volume: ${data.financials.totalVolume} ETB\n`;
+      csv += `Platform Revenue: ${data.financials.platformRevenue} ETB\n`;
+      csv += `Vendor Payouts: ${data.financials.vendorPayouts} ETB\n\n`;
+      
+      csv += '--- USERS ---\n';
+      csv += 'ID,First Name,Last Name,Email,Role,Created At\n';
+      data.users.forEach((u: any) => {
+        csv += `${u.id},${u.firstName},${u.lastName},${u.email},${u.role},${new Date(u.createdAt).toLocaleDateString()}\n`;
+      });
+
+      csv += '\n--- EVENTS ---\n';
+      csv += 'ID,Title,Status,Capacity,Registered,Created At\n';
+      data.events.forEach((e: any) => {
+        csv += `${e.id},${e.title},${e.status},${e.capacity},${e.registeredCount},${new Date(e.createdAt).toLocaleDateString()}\n`;
+      });
+
+      // Trigger download
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `eventhub_report_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success('Report downloaded successfully!');
+    } catch (error) {
+      toast.error('Failed to generate report');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleUpdateRate = () => {
+    const rate = parseFloat(newRate);
+    if (isNaN(rate) || rate < 0 || rate > 100) {
+      toast.error('Please enter a valid percentage between 0 and 100');
+      return;
+    }
+    updateRateMutation.mutate(rate);
+  };
+
   const totals = commissionsData?.totals || { totalVolume: 0, platformRevenue: 0 };
   const currentRate = configData?.config?.rate || 10;
   
@@ -63,7 +144,15 @@ export default function AdminDashboard() {
     <div className="space-y-8 max-w-7xl mx-auto pb-12">
       <div className="flex flex-col sm:flex-row justify-end items-start sm:items-center gap-4">
         <div className="flex gap-3">
-          <Button variant="outline" className="border-white/20">Download Full Report</Button>
+          <Button 
+            variant="outline" 
+            className="border-white/20 gap-2" 
+            onClick={handleDownloadReport}
+            disabled={isDownloading}
+          >
+            {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {isDownloading ? 'Generating...' : 'Download Full Report'}
+          </Button>
         </div>
       </div>
 
@@ -136,7 +225,14 @@ export default function AdminDashboard() {
               <h3 className="text-3xl font-bold text-primary">{currentRate}%</h3>
               <p className="text-xs text-muted-foreground mt-1">Applied to all paid events</p>
             </div>
-            <Button variant="outline" size="sm" className="border-primary/50 text-primary hover:bg-primary hover:text-primary-foreground transition-all">Change Rate</Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="border-primary/50 text-primary hover:bg-primary hover:text-primary-foreground transition-all"
+              onClick={() => { setNewRate(String(currentRate)); setShowRateModal(true); }}
+            >
+              Change Rate
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -224,7 +320,7 @@ export default function AdminDashboard() {
                   <TrendingUp className="w-5 h-5 text-green-500 mt-0.5" />
                   <div>
                     <h4 className="font-bold text-sm mb-1">Predicted Attendance Trends</h4>
-                    <p className="text-xs text-muted-foreground">Expect a 25% surge in registrations for "Technology" category events next week due to mid-term completion.</p>
+                    <p className="text-xs text-muted-foreground">Expect a 25% surge in registrations for &quot;Technology&quot; category events next week due to mid-term completion.</p>
                   </div>
                 </div>
               </div>
@@ -250,7 +346,7 @@ export default function AdminDashboard() {
                   <UserCheck className="w-5 h-5 text-orange-400 mt-0.5" />
                   <div>
                     <h4 className="font-bold text-sm mb-1">Best Performing Organizers</h4>
-                    <p className="text-xs text-muted-foreground">"Tech Club DBU" and "Entrepreneurship Society" currently have the highest attendee retention rate (92%).</p>
+                    <p className="text-xs text-muted-foreground">&quot;Tech Club DBU&quot; and &quot;Entrepreneurship Society&quot; currently have the highest attendee retention rate (92%).</p>
                   </div>
                 </div>
               </div>
@@ -272,6 +368,52 @@ export default function AdminDashboard() {
 
         </div>
       </div>
+
+      {/* Commission Rate Modal */}
+      <Dialog open={showRateModal} onOpenChange={setShowRateModal}>
+        <DialogContent className="sm:max-w-md bg-card border-border">
+          <DialogTitle className="text-xl font-bold">Update Commission Rate</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Set the platform commission percentage. This rate will be applied to all paid event ticket sales.
+          </DialogDescription>
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="rate">New Commission Rate (%)</Label>
+              <div className="relative">
+                <Input
+                  id="rate"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  value={newRate}
+                  onChange={(e) => setNewRate(e.target.value)}
+                  placeholder="e.g. 10"
+                  className="bg-white/5 border-white/10 pr-10"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">%</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Current rate: <span className="text-primary font-bold">{currentRate}%</span>. 
+                For a 100 ETB ticket, admin gets <span className="font-bold">{parseFloat(newRate || '0')} ETB</span> and vendor gets <span className="font-bold">{(100 - parseFloat(newRate || '0')).toFixed(1)} ETB</span>.
+              </p>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={() => setShowRateModal(false)} className="border-white/20">
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleUpdateRate} 
+                disabled={updateRateMutation.isPending}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {updateRateMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Update Rate
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

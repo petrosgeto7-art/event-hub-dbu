@@ -26,7 +26,7 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const existing = await prisma.bookmark.findUnique({
-        where: { userId_eventId: { userId: req.user!.id, eventId: req.params.eventId } },
+        where: { userId_eventId: { userId: req.user!.id, eventId: (req.params.eventId as string) } },
       });
 
       if (existing) {
@@ -34,7 +34,7 @@ router.post(
         sendSuccess(res, { bookmarked: false });
       } else {
         await prisma.bookmark.create({
-          data: { userId: req.user!.id, eventId: req.params.eventId },
+          data: { userId: req.user!.id, eventId: (req.params.eventId as string) },
         });
         sendSuccess(res, { bookmarked: true });
       }

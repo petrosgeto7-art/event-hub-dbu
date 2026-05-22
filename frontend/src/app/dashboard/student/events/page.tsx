@@ -1,18 +1,23 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
+import { CancelTicketDialog } from './cancel-ticket-dialog';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Calendar, MapPin, ArrowRight } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Calendar, MapPin, ArrowRight, QrCode } from 'lucide-react';
 
 export default function StudentEventsPage() {
+  const [selectedTicket, setSelectedTicket] = useState<any>(null);
+
   const { data: registrations, isLoading } = useQuery({
     queryKey: ['my-registrations'],
     queryFn: async () => {
@@ -49,7 +54,10 @@ export default function StudentEventsPage() {
       ) : (
         <div className="grid gap-4">
           {registrations?.map((reg: any, i: number) => {
-            const isPast = new Date(reg.event.date) < new Date();
+            const eventEndDate = new Date(reg.event.date);
+            eventEndDate.setHours(23, 59, 59, 999);
+            const isPast = eventEndDate < new Date();
+            
             return (
               <motion.div key={reg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                 <Card className={`overflow-hidden transition-all border-white/10 ${isPast ? 'opacity-70 bg-black/20' : 'bg-card/50 hover:bg-white/5'}`}>
@@ -99,8 +107,20 @@ export default function StudentEventsPage() {
                           <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4" /> {reg.event.location || 'Online'}</span>
                         </div>
                       </div>
-                      <div className="mt-6 flex justify-end gap-2">
-                        {isPast && reg.status === 'ATTENDED' && (
+                      <div className="mt-6 flex justify-end gap-2 items-center">
+                        {reg.status === 'CONFIRMED' && !isPast && (
+                          <CancelTicketDialog eventId={reg.event.id} eventTitle={reg.event.title} />
+                        )}
+                        {reg.status === 'CONFIRMED' && (
+                          <Button 
+                            variant="default" 
+                            className="bg-primary hover:bg-primary/90"
+                            onClick={() => setSelectedTicket(reg)}
+                          >
+                            <QrCode className="w-4 h-4 mr-2" /> View Ticket
+                          </Button>
+                        )}
+                        {isPast && !!reg.attendance && (
                           <Link href={`/dashboard/student/events/${reg.event.id}/feedback`}>
                             <Button variant="outline" className="border-primary/50 text-primary hover:bg-primary/10">
                               Leave Feedback
@@ -121,6 +141,55 @@ export default function StudentEventsPage() {
           })}
         </div>
       )}
+
+      {/* Ticket Modal */}
+      <Dialog open={!!selectedTicket} onOpenChange={(open) => !open && setSelectedTicket(null)}>
+        <DialogContent className="sm:max-w-md bg-card/95 border-border backdrop-blur-xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-center font-bold">{selectedTicket?.event.title}</DialogTitle>
+            <DialogDescription className="text-center text-muted-foreground mt-2">
+              Present this QR code at the event entrance.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center p-6 space-y-6">
+            <div className="bg-white p-4 rounded-xl border-4 border-primary/20 shadow-xl relative overflow-hidden">
+              {/* Corner Accents */}
+              <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-primary rounded-tl-sm"></div>
+              <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-primary rounded-tr-sm"></div>
+              <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-primary rounded-bl-sm"></div>
+              <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-primary rounded-br-sm"></div>
+              
+              {selectedTicket?.qrCode ? (
+                <img src={selectedTicket.qrCode} alt="Ticket QR Code" className="w-64 h-64 object-contain mix-blend-multiply" />
+              ) : (
+                <div className="w-64 h-64 flex flex-col items-center justify-center text-muted-foreground bg-gray-100 rounded-lg">
+                  <QrCode className="w-12 h-12 mb-2 opacity-50" />
+                  <span className="text-sm">QR Code not generated yet</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="w-full space-y-4 pt-4 border-t border-white/10">
+              <div className="flex justify-between items-center bg-black/20 p-3 rounded-lg">
+                <span className="text-sm text-muted-foreground flex items-center gap-2"><Calendar className="w-4 h-4 text-primary" /> Date & Time</span>
+                <span className="text-sm font-medium">
+                  {selectedTicket?.event.date && format(new Date(selectedTicket.event.date), 'MMM d, yyyy')} • {selectedTicket?.event.startTime}
+                </span>
+              </div>
+              <div className="flex justify-between items-center bg-black/20 p-3 rounded-lg">
+                <span className="text-sm text-muted-foreground flex items-center gap-2"><MapPin className="w-4 h-4 text-primary" /> Location</span>
+                <span className="text-sm font-medium text-right max-w-[200px] truncate">
+                  {selectedTicket?.event.location || 'Online Event'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center bg-black/20 p-3 rounded-lg">
+                <span className="text-sm text-muted-foreground flex items-center gap-2"><QrCode className="w-4 h-4 text-primary" /> Status</span>
+                <Badge className="bg-green-500/20 text-green-500">{selectedTicket?.status}</Badge>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

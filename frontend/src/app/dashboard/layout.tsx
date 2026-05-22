@@ -16,6 +16,33 @@ import {
 import { useTranslation, useLanguageStore } from '@/stores/language-store';
 import { useTheme } from '@/stores/theme-store';
 import { CommandPalette } from '@/components/layout/command-palette';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts';
+import { format } from 'date-fns';
+
+function LiveClock() {
+  const [time, setTime] = useState<Date | null>(null);
+
+  useEffect(() => {
+    setTime(new Date());
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  if (!time) return null;
+
+  return (
+    <div className="hidden lg:flex flex-col items-end justify-center mr-6 text-right">
+      <span className="text-sm font-bold text-foreground">
+        {format(time, 'EEEE, MMMM d, yyyy')}
+      </span>
+      <span className="text-xs text-muted-foreground font-medium">
+        {format(time, 'hh:mm:ss a')}
+      </span>
+    </div>
+  );
+}
 
 const roleConfig = {
   STUDENT: {
@@ -68,7 +95,7 @@ const roleConfig = {
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated, logout } = useAuthStore();
+  const { user, isAuthenticated, logout, isHydrated } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
   const { t, language } = useTranslation();
@@ -78,12 +105,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     setMounted(true);
-    if (!isAuthenticated) {
+  }, []);
+
+  useEffect(() => {
+    if (mounted && isHydrated && !isAuthenticated) {
       router.push('/login');
     }
-  }, [isAuthenticated, router]);
+  }, [mounted, isHydrated, isAuthenticated, router]);
 
-  if (!mounted || !isAuthenticated || !user) return null;
+  if (!mounted || !isHydrated || !isAuthenticated || !user) return null;
 
   const role = (user.role as keyof typeof roleConfig) || 'STUDENT';
   const config = roleConfig[role] || roleConfig.STUDENT;
@@ -199,8 +229,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* User Footer */}
         <div className="p-4 border-t border-border">
           <div className="flex items-center gap-3 mb-3 px-1">
-            <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0">
-              {user.firstName?.[0]}{user.lastName?.[0]}
+            <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0 overflow-hidden">
+              {user.avatar ? (
+                <img 
+                  src={user.avatar.startsWith('/uploads') 
+                    ? `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '')}${user.avatar}` 
+                    : user.avatar} 
+                  alt="Avatar" 
+                  className="w-full h-full object-cover" 
+                />
+              ) : (
+                <>{user.firstName?.[0]}{user.lastName?.[0]}</>
+              )}
             </div>
             <div className="overflow-hidden min-w-0">
               <p className="text-sm font-semibold truncate text-foreground">{user.firstName} {user.lastName}</p>
@@ -231,7 +271,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <kbd className="ml-4 bg-background px-1.5 py-0.5 rounded border border-border font-mono text-[10px] font-bold">Ctrl+K</kbd>
             </button>
           </div>
-          <NotificationDropdown />
+          <div className="flex items-center">
+            <LiveClock />
+            <NotificationDropdown />
+          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 md:p-8">

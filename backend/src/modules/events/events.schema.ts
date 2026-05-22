@@ -15,6 +15,8 @@ export const createEventSchema = z.object({
   tags: z.array(z.string()).optional().default([]),
   registrationDeadline: z.string().optional(),
   isFeatured: z.boolean().optional().default(false),
+  isFree: z.boolean().optional().default(true),
+  price: z.number().optional().default(0),
   ticketTiers: z.array(z.object({
     name: z.string().min(2),
     description: z.string().optional(),
@@ -24,6 +26,14 @@ export const createEventSchema = z.object({
 });
 
 export const updateEventSchema = createEventSchema.partial();
+
+export const updateEventStatusSchema = z.object({
+  status: z.enum(['CANCELLED', 'PUBLISHED']), // published is used for postponed
+  message: z.string().min(5, 'Message must be at least 5 characters'),
+  date: z.string().optional(),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+});
 
 export const eventQuerySchema = z.object({
   page: z.string().optional(),

@@ -14,7 +14,7 @@ export class EventsController {
 
   async findById(req: Request, res: Response, next: NextFunction) {
     try {
-      const event = await eventsService.findById(req.params.id);
+      const event = await eventsService.findById((req.params.id as string));
       sendSuccess(res, event);
     } catch (error) {
       next(error);
@@ -23,7 +23,7 @@ export class EventsController {
 
   async findBySlug(req: Request, res: Response, next: NextFunction) {
     try {
-      const event = await eventsService.findBySlug(req.params.slug);
+      const event = await eventsService.findBySlug((req.params.slug as string));
       sendSuccess(res, event);
     } catch (error) {
       next(error);
@@ -46,7 +46,21 @@ export class EventsController {
   async update(req: Request, res: Response, next: NextFunction) {
     try {
       const event = await eventsService.update(
-        req.params.id,
+        (req.params.id as string),
+        req.body,
+        req.user!.id,
+        req.user!.role
+      );
+      sendSuccess(res, event);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const event = await eventsService.updateStatus(
+        (req.params.id as string),
         req.body,
         req.user!.id,
         req.user!.role
@@ -60,7 +74,7 @@ export class EventsController {
   async delete(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await eventsService.delete(
-        req.params.id,
+        (req.params.id as string),
         req.user!.id,
         req.user!.role
       );

@@ -2,13 +2,13 @@ import prisma from '../../shared/prisma';
 import { BadRequestError, NotFoundError } from '../../shared/errors';
 
 export class AttendanceService {
-  async scanQr(qrToken: string, scannerId: string) {
+  async scanQr(qrToken: string, scannerId: string, currentEventId?: string) {
     // Find registration by QR token
     const registration = await prisma.registration.findUnique({
       where: { qrToken },
       include: {
         user: { select: { id: true, firstName: true, lastName: true, email: true } },
-        event: { select: { id: true, title: true, date: true, organizerId: true } },
+        event: { select: { id: true, title: true, date: true, startTime: true, endTime: true, organizerId: true } },
         attendance: true,
       },
     });
@@ -21,10 +21,42 @@ export class AttendanceService {
       throw new BadRequestError('Registration is not confirmed');
     }
 
-    // Check expiry
-    if (registration.qrExpiry && new Date() > registration.qrExpiry) {
-      throw new BadRequestError('QR code has expired');
+    // 1. Event Matching Validation
+    if (currentEventId && registration.eventId !== currentEventId) {
+      throw new BadRequestError('This ticket is for a different event!');
     }
+
+    // 2. Date & Time Validation — use LOCAL timezone (not UTC)
+    const eventDate = new Date(registration.event.date);
+    const today = new Date();
+    
+    // Build start and end times in local timezone by setting hours/minutes directly
+    const startDateTime = new Date(eventDate);
+    if (registration.event.startTime && registration.event.startTime.includes(':')) {
+      const [h, m] = registration.event.startTime.split(':').map(Number);
+      startDateTime.setHours(h, m, 0, 0);
+    }
+    
+    const endDateTime = new Date(eventDate);
+    if (registration.event.endTime && registration.event.endTime.includes(':')) {
+      const [h, m] = registration.event.endTime.split(':').map(Number);
+      endDateTime.setHours(h, m, 0, 0);
+    } else {
+      endDateTime.setHours(23, 59, 59, 999);
+    }
+    
+    // Open scanner 15 minutes before start
+    const scanOpenTime = new Date(startDateTime.getTime() - 15 * 60000);
+
+    if (today > endDateTime) {
+      throw new BadRequestError('This event has already ended.');
+    }
+    
+    if (today < scanOpenTime) {
+      throw new BadRequestError('Ticket scanning opens 15 minutes before the event starts.');
+    }
+
+    // QR codes are valid as long as the event hasn't already been attended
 
     // Check if already attended
     if (registration.attendance) {

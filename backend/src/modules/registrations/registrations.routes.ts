@@ -9,6 +9,7 @@ const router = Router();
 // Student routes
 router.post('/events/:eventId/register', authenticate, registrationsController.register);
 router.delete('/events/:eventId/register', authenticate, registrationsController.cancel);
+router.get('/events/:eventId/refund-preview', authenticate, registrationsController.getRefundPreview);
 router.get('/my/registrations', authenticate, registrationsController.getUserRegistrations);
 router.get('/registrations/:registrationId/qr', authenticate, registrationsController.getQrCode);
 

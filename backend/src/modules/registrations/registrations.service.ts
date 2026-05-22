@@ -17,12 +17,29 @@ export class RegistrationsService {
       throw new BadRequestError('Registration deadline has passed');
     }
 
+    // Check if event has already started
+    // Build start time in LOCAL timezone (not UTC) by setting hours/minutes directly
+    const eventDate = new Date(event.date);
+    const startDateTime = new Date(eventDate);
+    if (event.startTime && event.startTime.includes(':')) {
+      const [h, m] = event.startTime.split(':').map(Number);
+      startDateTime.setHours(h, m, 0, 0);
+    }
+    
+    if (new Date() >= startDateTime) {
+      throw new BadRequestError('Registration is closed. The event has already started.');
+    }
+
     // Check duplicate
     const existing = await prisma.registration.findFirst({
       where: { userId, eventId, status: { not: 'CANCELLED' } },
     });
     if (existing && existing.status !== 'CANCELLED') {
-      throw new ConflictError('Already registered for this event');
+      if (!event.isFree && existing.paymentStatus === 'PENDING') {
+        // User wants to retry a failed/pending payment
+      } else {
+        throw new ConflictError('Already registered for this event');
+      }
     }
 
     // Check capacity
@@ -30,8 +47,6 @@ export class RegistrationsService {
 
     // Generate QR token
     const qrToken = uuidv4();
-    const qrExpiry = new Date();
-    qrExpiry.setHours(qrExpiry.getHours() + 48);
 
     // Generate QR code data URL
     const qrData = JSON.stringify({ token: qrToken, eventId, userId });
@@ -49,7 +64,6 @@ export class RegistrationsService {
             status: isWaitlisted ? 'WAITLISTED' : 'CONFIRMED',
             qrCode,
             qrToken,
-            qrExpiry,
             cancelledAt: null,
           },
           include: {
@@ -65,7 +79,6 @@ export class RegistrationsService {
             status: isWaitlisted ? 'WAITLISTED' : 'CONFIRMED',
             qrCode,
             qrToken,
-            qrExpiry,
           },
           include: {
             event: {
@@ -87,20 +100,87 @@ export class RegistrationsService {
 
       // We do NOT increment registeredCount yet for paid events
 
-      // Initialize Chapa Checkout
+      // Get vendor (organizer) details for split payment
+      const vendor = await prisma.user.findUnique({ where: { id: event.organizerId } });
+      
+      // Get current commission config
+      const commConfig = await prisma.commissionConfig.findUnique({ where: { id: 'default' } });
+      const commissionRate = commConfig?.rate || 10.0;
+
+      // Setup subaccount for split payment if vendor has bank details
+      let subaccounts: Array<{ id: string }> | undefined;
+
+      if (vendor && vendor.cbeAccount) {
+        // Check if vendor already has a Chapa subaccount
+        let subaccountId = vendor.chapaSubaccountId;
+
+        if (!subaccountId) {
+          // Create a new subaccount for the vendor
+          // The split_value is the vendor's share (100 - commission%)
+          const vendorSharePercent = 100 - commissionRate;
+          subaccountId = await chapaService.createSubaccount({
+            business_name: `${vendor.firstName} ${vendor.lastName} - EventHub`,
+            account_name: `${vendor.firstName} ${vendor.lastName}`,
+            bank_code: '128', // CBE bank code in Chapa
+            account_number: vendor.cbeAccount,
+            split_type: 'percentage',
+            split_value: vendorSharePercent,
+          });
+
+          // Save subaccount ID to vendor profile
+          if (subaccountId) {
+            await prisma.user.update({
+              where: { id: vendor.id },
+              data: { chapaSubaccountId: subaccountId },
+            });
+          }
+        }
+
+        if (subaccountId) {
+          subaccounts = [{ id: subaccountId }];
+        }
+      }
+
+      // Initialize Chapa Checkout with optional split payment
+      const backendUrl = `http://localhost:${process.env.PORT || 4000}`;
+      const returnUrl = `${env.FRONTEND_URL}/dashboard/student/payment-verify?tx_ref=${txRef}`;
       const checkoutUrl = await chapaService.initialize({
         amount: event.price,
         email: user?.email || 'student@dbu.edu.et',
         first_name: user?.firstName || 'Student',
         last_name: user?.lastName || 'DBU',
         tx_ref: txRef,
-        callback_url: `${env.FRONTEND_URL}/api/payments/verify-registration/${txRef}`,
-        return_url: `${env.FRONTEND_URL}/dashboard/student/events`,
+        callback_url: `${backendUrl}/api/payments/verify-registration/${txRef}`,
+        return_url: returnUrl,
         customization: {
           title: `Ticket: ${event.title}`,
           description: `Payment for ${event.title} registration`,
-        }
+        },
+        subaccounts,
       });
+
+      // MOCK BYPASS: If the mock bypass returned the return_url directly, process it instantly
+      if (checkoutUrl === returnUrl) {
+        console.log('Mock bypass: Instantly confirming payment');
+        await prisma.registration.update({
+          where: { id: registration.id },
+          data: { paymentStatus: 'PAID', status: 'CONFIRMED' },
+        });
+        
+        if (!isWaitlisted && !existing) {
+          await prisma.event.update({
+            where: { id: eventId },
+            data: { registeredCount: { increment: 1 } },
+          });
+        }
+
+        return {
+          ...registration,
+          requiresPayment: false,
+          status: 'CONFIRMED',
+          paymentStatus: 'PAID'
+        };
+      }
 
       return {
         ...registration,
@@ -131,9 +211,31 @@ export class RegistrationsService {
     return { ...registration, requiresPayment: false };
   }
 
+  async getRefundPreview(userId: string, eventId: string) {
+    const registration = await prisma.registration.findFirst({
+      where: { userId, eventId, status: { not: 'CANCELLED' } },
+      include: { event: true },
+    });
+
+    if (!registration) throw new NotFoundError('Registration');
+
+    const ticketPrice = registration.event.price || 0;
+    
+    if (ticketPrice === 0 || registration.paymentStatus !== 'PAID') {
+      return { ticketPrice: 0, refundPercentage: 0, refundAmount: 0 };
+    }
+
+    // Default policy: 80% refund (20% cancellation fee)
+    const refundPercentage = 80;
+    const refundAmount = (ticketPrice * refundPercentage) / 100;
+
+    return { ticketPrice, refundPercentage, refundAmount };
+  }
+
   async cancel(userId: string, eventId: string) {
     const registration = await prisma.registration.findFirst({
       where: { userId, eventId, status: { not: 'CANCELLED' } },
+      include: { event: true },
     });
 
     if (!registration) throw new NotFoundError('Registration');
@@ -142,10 +244,22 @@ export class RegistrationsService {
     }
 
     const wasConfirmed = registration.status === 'CONFIRMED';
+    const ticketPrice = registration.event.price || 0;
+    
+    // Calculate refund amount
+    let refundAmount = 0;
+    if (ticketPrice > 0 && registration.paymentStatus === 'PAID') {
+      refundAmount = (ticketPrice * 80) / 100; // 80% refund policy
+    }
 
     await prisma.registration.update({
       where: { id: registration.id },
-      data: { status: 'CANCELLED', cancelledAt: new Date() },
+      data: { 
+        status: 'CANCELLED', 
+        cancelledAt: new Date(),
+        // Only set refundAmount if they actually paid
+        ...(refundAmount > 0 ? { refundAmount } : {})
+      } as any,
     });
 
     // Decrement count if was confirmed
@@ -173,7 +287,7 @@ export class RegistrationsService {
       }
     }
 
-    return { message: 'Registration cancelled' };
+    return { message: 'Registration cancelled', refundAmount };
   }
 
   async getEventRegistrations(eventId: string, page: number = 1, limit: number = 20) {
@@ -223,7 +337,7 @@ export class RegistrationsService {
     });
 
     if (!registration) throw new NotFoundError('Registration');
-    return { qrCode: registration.qrCode, qrExpiry: registration.qrExpiry };
+    return { qrCode: registration.qrCode };
   }
 }
 

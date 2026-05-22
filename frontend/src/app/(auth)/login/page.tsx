@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
@@ -15,7 +15,25 @@ import { Loader2, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const setAuth = useAuthStore((state) => state.setAuth);
+  const { user, isHydrated, setAuth } = useAuthStore();
+
+  useEffect(() => {
+    if (isHydrated && user) {
+      switch (user.role) {
+        case 'SUPER_ADMIN':
+        case 'ADMIN':
+          router.replace('/dashboard/admin');
+          break;
+        case 'ORGANIZER':
+          router.replace('/dashboard/organizer');
+          break;
+        default:
+          router.replace('/dashboard/student');
+      }
+    }
+  }, [user, isHydrated, router]);
+
+
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -44,13 +62,13 @@ export default function LoginPage() {
       switch (user.role) {
         case 'SUPER_ADMIN':
         case 'ADMIN':
-          router.push('/dashboard/admin');
+          router.replace('/dashboard/admin');
           break;
         case 'ORGANIZER':
-          router.push('/dashboard/organizer');
+          router.replace('/dashboard/organizer');
           break;
         default:
-          router.push('/dashboard/student');
+          router.replace('/dashboard/student');
       }
     } catch (error: any) {
       toast.error('Login failed. Please check your email and password.');
@@ -58,6 +76,8 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  if (!isHydrated || user) return null;
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>

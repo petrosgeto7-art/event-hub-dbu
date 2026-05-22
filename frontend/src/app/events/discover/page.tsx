@@ -43,10 +43,12 @@ function DiscoverEventsContent() {
     },
   });
 
-  const rawEvents = eventsData?.events || eventsData || [];
+  const rawEvents = Array.isArray(eventsData) ? eventsData : (eventsData?.events || []);
   const filteredEvents = rawEvents.filter((e: any) => {
-    if (priceFilter === 'free') return e.isFree || e.price === 0;
-    if (priceFilter === 'paid') return !e.isFree && e.price > 0;
+    const price = Number(e.price);
+    const isEventFree = e.isFree === true || !price || price === 0;
+    if (priceFilter === 'free') return isEventFree;
+    if (priceFilter === 'paid') return !isEventFree;
     return true;
   });
 
@@ -156,7 +158,30 @@ function DiscoverEventsContent() {
                           <img src={imgSrc} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                         );
                       })()}
-                      <div className="absolute top-3 left-3">
+                      <div className="absolute top-3 left-3 flex gap-2">
+                        {(() => {
+                          const startDateTime = new Date(event.date);
+                          if (event.startTime && event.startTime.includes(':')) {
+                            const [hours, minutes] = event.startTime.split(':');
+                            startDateTime.setHours(parseInt(hours, 10) || 0, parseInt(minutes, 10) || 0, 0, 0);
+                          }
+                          const endDateTime = new Date(event.date);
+                          if (event.endTime && event.endTime.includes(':')) {
+                            const [hours, minutes] = event.endTime.split(':');
+                            endDateTime.setHours(parseInt(hours, 10) || 23, parseInt(minutes, 10) || 59, 0, 0);
+                          } else {
+                            endDateTime.setHours(23, 59, 59, 999);
+                          }
+                          const now = new Date();
+                          const isLive = startDateTime <= now && endDateTime > now;
+                          
+                          return isLive ? (
+                            <Badge className="bg-red-500 text-white animate-pulse">
+                              <span className="w-2 h-2 rounded-full bg-white mr-1.5 animate-ping" />
+                              Live
+                            </Badge>
+                          ) : null;
+                        })()}
                         <Badge className="bg-background/80 backdrop-blur-md text-foreground border-border text-xs font-bold">{event.category?.name || 'Event'}</Badge>
                       </div>
                       <div className="absolute top-3 right-3">

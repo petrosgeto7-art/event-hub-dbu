@@ -43,7 +43,7 @@ router.get(
 router.put(
   '/config',
   authenticate,
-  authorize(Role.SUPER_ADMIN),
+  authorize(Role.SUPER_ADMIN, Role.ADMIN),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { rate } = req.body;

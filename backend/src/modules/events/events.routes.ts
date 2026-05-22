@@ -3,7 +3,7 @@ import { eventsController } from './events.controller';
 import { validate } from '../../middleware/validate';
 import { authenticate, optionalAuth } from '../../middleware/auth';
 import { authorize } from '../../middleware/rbac';
-import { createEventSchema, updateEventSchema, eventQuerySchema } from './events.schema';
+import { createEventSchema, updateEventSchema, updateEventStatusSchema, eventQuerySchema } from './events.schema';
 import { Role } from '@prisma/client';
 
 const router = Router();
@@ -19,6 +19,7 @@ router.get('/:id', eventsController.findById);
 // Protected routes
 router.post('/', authenticate, authorize(Role.ADMIN, Role.ORGANIZER, Role.SUPER_ADMIN), validate(createEventSchema), eventsController.create);
 router.put('/:id', authenticate, authorize(Role.ADMIN, Role.ORGANIZER, Role.SUPER_ADMIN), validate(updateEventSchema), eventsController.update);
+router.patch('/:id/status', authenticate, authorize(Role.ADMIN, Role.ORGANIZER, Role.SUPER_ADMIN), validate(updateEventStatusSchema), eventsController.updateStatus);
 router.delete('/:id', authenticate, authorize(Role.ADMIN, Role.ORGANIZER, Role.SUPER_ADMIN), eventsController.delete);
 
 // Organizer's events

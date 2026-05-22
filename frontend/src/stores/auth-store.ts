@@ -26,12 +26,15 @@ interface AuthState {
   logout: () => void;
 }
 
-export const useAuthStore = create<AuthState>()(
+export const useAuthStore = create<AuthState & { isHydrated: boolean; setHydrated: () => void }>()(
   persist(
     (set) => ({
       user: null,
       accessToken: null,
       isAuthenticated: false,
+      isHydrated: false,
+      
+      setHydrated: () => set({ isHydrated: true }),
       
       setAuth: (user, accessToken) => set({ user, accessToken, isAuthenticated: true }),
       
@@ -47,8 +50,12 @@ export const useAuthStore = create<AuthState>()(
       name: 'eventhub-auth',
       partialize: (state) => ({ 
         user: state.user, 
-        isAuthenticated: state.isAuthenticated 
-      }), // Don't persist access token in localStorage for security (rely on refresh token)
+        isAuthenticated: state.isAuthenticated,
+        accessToken: state.accessToken,
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated();
+      },
     }
   )
 );

@@ -5,7 +5,7 @@ import { sendSuccess, sendPaginated } from '../../shared/helpers';
 export class RegistrationsController {
   async register(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await registrationsService.register(req.user!.id, req.params.eventId);
+      const result = await registrationsService.register(req.user!.id, (req.params.eventId as string));
       sendSuccess(res, result, 201);
     } catch (error) {
       next(error);
@@ -14,7 +14,16 @@ export class RegistrationsController {
 
   async cancel(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await registrationsService.cancel(req.user!.id, req.params.eventId);
+      const result = await registrationsService.cancel(req.user!.id, (req.params.eventId as string));
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getRefundPreview(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await registrationsService.getRefundPreview(req.user!.id, (req.params.eventId as string));
       sendSuccess(res, result);
     } catch (error) {
       next(error);
@@ -23,10 +32,10 @@ export class RegistrationsController {
 
   async getEventRegistrations(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 20;
+      const page = parseInt(req.query.page as any) || 1;
+      const limit = parseInt(req.query.limit as any) || 20;
       const { registrations, total } = await registrationsService.getEventRegistrations(
-        req.params.eventId, page, limit
+        req.params.eventId as string, page, limit
       );
       sendPaginated(res, registrations, total, page, limit);
     } catch (error) {
@@ -45,7 +54,7 @@ export class RegistrationsController {
 
   async getQrCode(req: Request, res: Response, next: NextFunction) {
     try {
-      const qr = await registrationsService.getQrCode(req.params.registrationId, req.user!.id);
+      const qr = await registrationsService.getQrCode((req.params.registrationId as string), req.user!.id);
       sendSuccess(res, qr);
     } catch (error) {
       next(error);

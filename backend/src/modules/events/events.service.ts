@@ -20,6 +20,8 @@ export class EventsService {
     capacity: true,
     registeredCount: true,
     status: true,
+    isFree: true,
+    price: true,
     tags: true,
     registrationDeadline: true,
     isFeatured: true,
@@ -55,7 +57,11 @@ export class EventsService {
     }
 
     if (query.category) {
-      where.category = { slug: query.category };
+      const category = await prisma.category.findUnique({ where: { slug: query.category } });
+      if (!category) {
+        return { events: [], total: 0, page, limit };
+      }
+      where.categoryId = category.id;
     }
 
     if (query.status) {
@@ -164,6 +170,8 @@ export class EventsService {
         organizerId,
         universityId: universityId || undefined,
         status: 'PUBLISHED',
+        isFree: data.isFree,
+        price: data.isFree ? 0 : (data.price || 0),
         ticketTiers: {
           create: [
             {
@@ -197,27 +205,90 @@ export class EventsService {
         registrationDeadline: data.registrationDeadline
           ? new Date(data.registrationDeadline)
           : undefined,
-      },
+      } as any,
       select: this.eventSelect,
     });
 
     return updated;
   }
 
-  async delete(id: string, userId: string, userRole: Role) {
+  async updateStatus(id: string, data: any, userId: string, userRole: Role) {
     const event = await prisma.event.findUnique({ where: { id } });
     if (!event) throw new NotFoundError('Event');
 
     if (event.organizerId !== userId && !['ADMIN', 'SUPER_ADMIN'].includes(userRole)) {
-      throw new ForbiddenError('You can only delete your own events');
+      throw new ForbiddenError('You can only modify your own events');
     }
 
-    await prisma.event.update({
+    // Prepare update data
+    const updateData: any = { status: data.status };
+    if (data.status === 'PUBLISHED' && data.date) {
+      updateData.date = new Date(data.date);
+      if (data.startTime) updateData.startTime = data.startTime;
+      if (data.endTime) updateData.endTime = data.endTime;
+    }
+
+    const updated = await prisma.event.update({
       where: { id },
-      data: { status: 'CANCELLED' },
+      data: updateData,
+      select: this.eventSelect,
     });
 
-    return { message: 'Event cancelled successfully' };
+    // Handle cancellations and refunds if event is cancelled
+    if (data.status === 'CANCELLED') {
+      // Find all active registrations
+      const activeRegistrations = await prisma.registration.findMany({
+        where: { eventId: id, status: { not: 'CANCELLED' } }
+      });
+
+      for (const reg of activeRegistrations) {
+        const refundAmount = (reg.paymentStatus === 'PAID' && event.price && event.price > 0) ? event.price : 0;
+        
+        await prisma.registration.update({
+          where: { id: reg.id },
+          data: {
+            status: 'CANCELLED',
+            cancelledAt: new Date(),
+            ...(refundAmount > 0 ? { refundAmount } : {})
+          } as any
+        });
+      }
+    }
+
+    // Notify registered users
+    const registrationsToNotify = await prisma.registration.findMany({
+      where: { eventId: id },
+      select: { userId: true, status: true },
+      distinct: ['userId']
+    });
+
+    if (registrationsToNotify.length > 0) {
+      const notificationTitle = data.status === 'CANCELLED' 
+        ? `Event Cancelled: ${event.title}` 
+        : `Event Postponed: ${event.title}`;
+
+      const notifications = registrationsToNotify.map(reg => ({
+        userId: reg.userId,
+        title: notificationTitle,
+        message: data.message || (data.status === 'CANCELLED' ? 'The organizer has cancelled this event. A full refund has been issued if you purchased a ticket.' : 'The event details have been updated.'),
+        type: 'EVENT_UPDATE' as const
+      }));
+
+      await prisma.notification.createMany({
+        data: notifications
+      });
+    }
+
+    return updated;
+  }
+
+  async delete(id: string, userId: string, userRole: Role) {
+    return this.updateStatus(
+      id, 
+      { status: 'CANCELLED', message: 'The event was cancelled by the organizer.' }, 
+      userId, 
+      userRole
+    );
   }
 
   async getTrending(limit: number = 6) {

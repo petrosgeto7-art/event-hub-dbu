@@ -230,4 +230,38 @@ router.get(
   }
 );
 
+// Download full platform report
+router.get(
+  '/reports/full',
+  authenticate,
+  authorize(Role.ADMIN, Role.SUPER_ADMIN),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const [users, events, commissions] = await Promise.all([
+        prisma.user.findMany({ select: { id: true, firstName: true, lastName: true, email: true, role: true, createdAt: true } }),
+        prisma.event.findMany({ select: { id: true, title: true, status: true, capacity: true, registeredCount: true, createdAt: true } }),
+        prisma.commission.aggregate({ _sum: { totalAmount: true, adminAmount: true, vendorAmount: true } })
+      ]);
+
+      const data = {
+        generatedAt: new Date(),
+        totalUsers: users.length,
+        totalEvents: events.length,
+        financials: {
+          totalVolume: commissions._sum.totalAmount || 0,
+          platformRevenue: commissions._sum.adminAmount || 0,
+          vendorPayouts: commissions._sum.vendorAmount || 0,
+        },
+        users,
+        events
+      };
+
+      // Since the request asks for a report, returning JSON that the frontend can format as a file download.
+      sendSuccess(res, data, 200, { message: 'Report generated' });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 export default router;

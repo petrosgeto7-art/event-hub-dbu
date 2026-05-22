@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -37,13 +38,21 @@ const eventSchema = z.object({
   isFree: z.boolean(),
   price: z.number().min(0, 'Price cannot be negative'),
   capacity: z.number().min(1, 'Capacity must be at least 1'),
+  agreedToCommission: z.boolean().optional()
+}).refine((data) => {
+  if (!data.isFree && !data.agreedToCommission) {
+    return false;
+  }
+  return true;
+}, {
+  message: "You must agree to the commission terms to publish a paid event.",
+  path: ["agreedToCommission"],
 });
 
 type EventFormValues = z.infer<typeof eventSchema>;
 
 export default function CreateEventPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'basic' | 'details' | 'tickets'>('basic');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // AI Features State
@@ -87,6 +96,7 @@ export default function CreateEventPage() {
       capacity: 100,
       isFree: true,
       price: 0,
+      agreedToCommission: false,
     },
   });
 
@@ -104,28 +114,70 @@ export default function CreateEventPage() {
     }
     setIsGeneratingAI(true);
     
-    // Simulate AI Generation
-    await new Promise(r => setTimeout(r, 2000));
-    
-    setValue('title', 'Innovate 2026: The Future of Tech Hackathon');
-    setValue('categoryId', categories?.[0]?.id || '');
-    setValue('description', 'Join us for an intense 48-hour coding marathon where top student innovators and creators will build the future of AI technology. Food, drinks, mentorship, and awesome prizes provided! Prepare to pitch your ideas to industry leaders.');
-    setValue('isOnline', false);
-    setValue('location', 'Main Campus Auditorium, DBU');
-    
-    // Set dates to next weekend
-    const nextWeekend = new Date();
-    nextWeekend.setDate(nextWeekend.getDate() + (6 - nextWeekend.getDay()));
-    setValue('date', nextWeekend.toISOString().split('T')[0]);
-    setValue('startTime', '09:00');
-    setValue('endTime', '18:00');
-    
-    setValue('capacity', 250);
-    setValue('isFree', false);
-    setValue('price', 150);
-    
-    setIsGeneratingAI(false);
-    toast.success('AI successfully drafted your event!');
+    try {
+      const response = await fetch(`https://text.pollinations.ai/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: 'You are an event management assistant. Create an event based on the user prompt. Return ONLY valid JSON with no markdown formatting. DO NOT wrap the output in ```json or ```. The JSON must have these exact keys: title (string), description (detailed string > 50 chars), isOnline (boolean), location (string, give a realistic venue), capacity (number), isFree (boolean), price (number in ETB).' },
+            { role: 'user', content: aiPrompt }
+          ],
+          jsonMode: true
+        })
+      });
+
+      const text = await response.text();
+      // clean up any markdown if it accidentally added it
+      const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const data = JSON.parse(jsonStr);
+
+      setValue('title', data.title || 'Untitled Event');
+      setValue('categoryId', categories?.[0]?.id || '');
+      setValue('description', data.description || aiPrompt);
+      setValue('isOnline', data.isOnline || false);
+      setValue('location', data.location || 'Main Campus Auditorium');
+      
+      // Set dates to next weekend
+      const nextWeekend = new Date();
+      nextWeekend.setDate(nextWeekend.getDate() + (6 - nextWeekend.getDay()));
+      setValue('date', nextWeekend.toISOString().split('T')[0]);
+      setValue('startTime', '09:00');
+      setValue('endTime', '18:00');
+      
+      setValue('capacity', data.capacity || 100);
+      setValue('isFree', data.isFree !== undefined ? data.isFree : true);
+      setValue('price', data.price || 0);
+
+      // Automatically pre-fill the image prompt
+      setImagePrompt(`Professional high quality event banner for: ${data.title}`);
+
+      toast.success('AI successfully drafted your event!');
+    } catch (err) {
+      console.error('AI Generation error:', err);
+      // Smart Fallback by parsing the text manually if AI fails
+      setValue('title', aiPrompt.split(' ').slice(0, 5).join(' ') + ' Event');
+      setValue('categoryId', categories?.[0]?.id || '');
+      setValue('description', `${aiPrompt}\n\nJoin us for an intense and exciting event where top student innovators and creators will gather. Food, drinks, mentorship, and awesome prizes provided! Prepare to pitch your ideas to industry leaders.`);
+      setValue('isOnline', aiPrompt.toLowerCase().includes('online') || aiPrompt.toLowerCase().includes('zoom'));
+      setValue('location', 'Main Campus Auditorium, DBU');
+      
+      // Set dates to next weekend
+      const nextWeekend = new Date();
+      nextWeekend.setDate(nextWeekend.getDate() + (6 - nextWeekend.getDay()));
+      setValue('date', nextWeekend.toISOString().split('T')[0]);
+      setValue('startTime', '09:00');
+      setValue('endTime', '18:00');
+      
+      setValue('capacity', aiPrompt.includes('200') ? 200 : 150);
+      setValue('isFree', !aiPrompt.toLowerCase().includes('paid'));
+      setValue('price', aiPrompt.toLowerCase().includes('paid') ? 150 : 0);
+      
+      setImagePrompt(`A professional banner for ${aiPrompt}`);
+      toast.success('Generated basic draft from prompt!');
+    } finally {
+      setIsGeneratingAI(false);
+    }
   };
 
   // AI Image Generator
@@ -135,35 +187,15 @@ export default function CreateEventPage() {
       return;
     }
     setIsGeneratingImage(true);
-    // Simulate generation time
-    await new Promise(r => setTimeout(r, 3000));
-    // Provide a beautiful Unsplash placeholder
-    setGeneratedImage('https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1200&q=80');
-    setIsGeneratingImage(false);
-    toast.success('Image generated successfully!');
-  };
-
-  const validateAndProceed = async (nextTab: 'basic' | 'details' | 'tickets') => {
-    let fieldsToValidate: (keyof EventFormValues)[] = [];
-    if (activeTab === 'basic') fieldsToValidate = ['title', 'categoryId', 'isOnline', 'location', 'date', 'startTime', 'endTime'];
-    if (activeTab === 'details') fieldsToValidate = ['description'];
+    // Use Pollinations AI to generate a real image for free
+    const encodedPrompt = encodeURIComponent(`${imagePrompt} event banner professional high quality 8k`);
+    const seed = Math.floor(Math.random() * 1000000); // Add random seed to prevent caching
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1200&height=400&nologo=true&seed=${seed}`;
     
-    // Allow moving backwards without strict validation
-    if (
-      (activeTab === 'tickets') || 
-      (activeTab === 'details' && nextTab === 'basic')
-    ) {
-      setActiveTab(nextTab);
-      return;
-    }
-
-    const isValid = await trigger(fieldsToValidate);
-    if (isValid) {
-      setActiveTab(nextTab);
-    } else {
-      toast.error('Please fill all required fields correctly before proceeding.');
-    }
+    // Set the image immediately and let the img tag handle loading state
+    setGeneratedImage(imageUrl);
   };
+
 
   const onSubmit = async (data: EventFormValues) => {
     try {
@@ -201,11 +233,6 @@ export default function CreateEventPage() {
     }
   };
 
-  const steps = [
-    { id: 'basic', label: 'Basic Info', icon: Info },
-    { id: 'details', label: 'Details', icon: AlignLeft },
-    { id: 'tickets', label: 'Tickets', icon: Ticket },
-  ];
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -228,7 +255,9 @@ export default function CreateEventPage() {
           <Button variant="ghost" disabled className="text-muted-foreground">Preview</Button>
           <Button 
             className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
-            onClick={handleSubmit(onSubmit)}
+            onClick={handleSubmit(onSubmit, () => {
+              toast.error("Please fix the errors in the form before publishing.");
+            })}
             disabled={isSubmitting}
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
@@ -238,30 +267,9 @@ export default function CreateEventPage() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar */}
-        <aside className="w-64 border-r border-border bg-card hidden md:block">
-          <nav className="p-4 space-y-1">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4 px-3">Build Event</div>
-            {steps.map((step) => {
-              const isActive = activeTab === step.id;
-              return (
-                <button
-                  key={step.id}
-                  onClick={() => validateAndProceed(step.id as any)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
-                >
-                  <step.icon className={`w-4 h-4 ${isActive ? 'text-primary' : ''}`} />
-                  {step.label}
-                  {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
-
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto bg-background/50">
-          <div className="max-w-3xl mx-auto py-10 px-6">
+        <main className="flex-1 overflow-y-auto bg-background/50 w-full">
+          <div className="max-w-4xl mx-auto py-10 px-6">
             
             {/* 🪄 AI MAGIC WAND HEADER */}
             <div className="mb-10 p-1 rounded-2xl bg-gradient-to-r from-primary via-purple-500 to-orange-400">
@@ -291,8 +299,7 @@ export default function CreateEventPage() {
             <form onSubmit={(e) => e.preventDefault()} className="space-y-12">
               
               {/* BASIC INFO */}
-              {activeTab === 'basic' && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-10">
+              <div className="space-y-10">
                   <div>
                     <h2 className="text-3xl font-bold mb-2 text-foreground">Basic Info</h2>
                     <p className="text-muted-foreground">Name your event and tell event-goers why they should come. Add details that highlight what makes it unique.</p>
@@ -315,7 +322,7 @@ export default function CreateEventPage() {
                         name="categoryId"
                         control={control}
                         render={({ field }) => (
-                          <Select onValueChange={field.onChange} value={field.value || undefined} defaultValue={field.value || undefined}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <SelectTrigger className={`h-14 bg-card border-border text-foreground ${errors.categoryId ? 'border-destructive' : ''}`}>
                               <SelectValue placeholder="Select a category" />
                             </SelectTrigger>
@@ -415,17 +422,10 @@ export default function CreateEventPage() {
                     </div>
                   </div>
 
-                  <div className="pt-8 flex justify-end">
-                    <Button type="button" onClick={() => validateAndProceed('details')} className="h-12 px-8 bg-foreground text-background hover:bg-foreground/90 text-md font-semibold">
-                      Save & Continue
-                    </Button>
-                  </div>
-                </motion.div>
-              )}
+              </div>
 
               {/* DETAILS */}
-              {activeTab === 'details' && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-10">
+              <div className="space-y-10 mt-16 pt-16 border-t border-border">
                   <div>
                     <h2 className="text-3xl font-bold mb-2 text-foreground">Details & Banner</h2>
                     <p className="text-muted-foreground">Add a banner image and provide a detailed description of your event.</p>
@@ -445,10 +445,30 @@ export default function CreateEventPage() {
                       <TabsContent value="generate" className="space-y-4">
                         {generatedImage ? (
                           <div className="relative w-full h-64 rounded-xl overflow-hidden border border-border group">
-                            <img src={generatedImage} alt="Generated Banner" className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <Button variant="outline" onClick={() => setGeneratedImage(null)} className="border-white text-white hover:bg-white/20"><RefreshCw className="w-4 h-4 mr-2" /> Regenerate</Button>
-                            </div>
+                            {isGeneratingImage && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-secondary/80 z-10 backdrop-blur-sm">
+                                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                              </div>
+                            )}
+                            <img 
+                              src={generatedImage} 
+                              alt="Generated Banner" 
+                              className="w-full h-full object-cover"
+                              onLoad={() => {
+                                setIsGeneratingImage(false);
+                                toast.success('Image generated successfully!');
+                              }}
+                              onError={() => {
+                                setIsGeneratingImage(false);
+                                setGeneratedImage(null);
+                                toast.error('Failed to load image. Try another prompt.');
+                              }}
+                            />
+                            {!isGeneratingImage && (
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
+                                <Button variant="outline" onClick={() => { setGeneratedImage(null); setIsGeneratingImage(false); }} className="border-white text-white hover:bg-white/20"><RefreshCw className="w-4 h-4 mr-2" /> Regenerate</Button>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="flex flex-col gap-3">
@@ -490,20 +510,10 @@ export default function CreateEventPage() {
                     {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
                   </div>
 
-                  <div className="pt-8 flex justify-between">
-                    <Button type="button" variant="outline" onClick={() => setActiveTab('basic')} className="h-12 px-8 bg-card border-border text-foreground">
-                      Back
-                    </Button>
-                    <Button type="button" onClick={() => validateAndProceed('tickets')} className="h-12 px-8 bg-foreground text-background hover:bg-foreground/90 text-md font-semibold">
-                      Save & Continue
-                    </Button>
-                  </div>
-                </motion.div>
-              )}
+              </div>
 
               {/* TICKETS & PRICING */}
-              {activeTab === 'tickets' && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-10">
+              <div className="space-y-10 mt-16 pt-16 border-t border-border">
                   <div>
                     <h2 className="text-3xl font-bold mb-2 text-foreground">Tickets & Capacity</h2>
                     <p className="text-muted-foreground">Create tickets and set your capacity. You can add more ticket types later.</p>
@@ -571,16 +581,46 @@ export default function CreateEventPage() {
                         </div>
                       )}
                     </div>
+
+                    {!isFree && (
+                      <div className="space-y-3 mt-8">
+                        <div className="flex items-start space-x-3 p-4 bg-secondary/30 rounded-xl border border-border">
+                          <Controller
+                            name="agreedToCommission"
+                            control={control}
+                            render={({ field }) => (
+                              <Checkbox 
+                                id="agreedToCommission"
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                className="mt-1"
+                              />
+                            )}
+                          />
+                          <div className="grid gap-1.5 leading-none">
+                            <label
+                              htmlFor="agreedToCommission"
+                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-foreground cursor-pointer"
+                            >
+                              I agree to the platform commission terms <span className="text-destructive">*</span>
+                            </label>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              By publishing a paid event, you agree that the platform will deduct a commission share (determined by the admin) from each ticket sold. Your remaining revenue will be split directly into your Chapa subaccount upon every transaction.
+                            </p>
+                            {errors.agreedToCommission && <p className="text-sm text-destructive font-semibold mt-1">{errors.agreedToCommission.message}</p>}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="pt-8 flex justify-between items-center border-t border-border mt-12">
-                    <Button type="button" variant="outline" onClick={() => setActiveTab('details')} className="h-12 px-8 bg-card border-border text-foreground">
-                      Back
-                    </Button>
+                  <div className="pt-8 flex justify-end items-center border-t border-border mt-12">
                     <div className="flex gap-4">
                       <Button 
                         type="button" 
-                        onClick={handleSubmit(onSubmit)} 
+                        onClick={handleSubmit(onSubmit, () => {
+                          toast.error("Please fix the errors in the form before publishing.");
+                        })} 
                         disabled={isSubmitting}
                         className="h-12 px-10 bg-primary text-primary-foreground hover:bg-primary/90 text-lg font-bold shadow-lg shadow-primary/20"
                       >
@@ -589,8 +629,7 @@ export default function CreateEventPage() {
                       </Button>
                     </div>
                   </div>
-                </motion.div>
-              )}
+              </div>
             </form>
           </div>
         </main>

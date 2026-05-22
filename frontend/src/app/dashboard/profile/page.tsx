@@ -95,19 +95,21 @@ export default function ProfilePage() {
       const formData = new FormData();
       formData.append('avatar', file);
 
-      // We would ideally have an upload endpoint. 
-      // For MVP, we'll mock the success if the endpoint doesn't exist yet.
-      // const res = await api.post('/upload/avatar', formData);
-      // const avatarUrl = res.data.url;
+      const res = await api.post('/users/upload/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const avatarUrl = res.data.data?.url;
+      if (avatarUrl) {
+        // Build the full URL for display (backend serves from /uploads/)
+        const fullAvatarUrl = `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '')}${avatarUrl}`;
+        updateUser({ avatar: fullAvatarUrl });
+        queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+      }
       
-      // Simulate upload delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // MOCK: Update user with fake avatar URL
-      // updateMutation.mutate({ ...profile, avatar: 'https://via.placeholder.com/150' });
       toast.success('Avatar updated successfully');
-    } catch (error) {
-      toast.error('Failed to upload avatar');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to upload avatar');
     } finally {
       setIsUploading(false);
     }
@@ -135,7 +137,9 @@ export default function ProfilePage() {
         <CardContent className="px-6 pb-6 pt-0 relative flex flex-col sm:flex-row items-center sm:items-end gap-6 sm:-mt-12">
           <div className="relative group">
             <Avatar className="w-24 h-24 border-4 border-background bg-muted">
-              <AvatarImage src={profile?.avatar} />
+              <AvatarImage src={profile?.avatar?.startsWith('/uploads') 
+                ? `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '')}${profile.avatar}` 
+                : profile?.avatar} />
               <AvatarFallback className="text-2xl font-bold bg-primary/20 text-primary">
                 {profile?.firstName?.[0]}{profile?.lastName?.[0]}
               </AvatarFallback>

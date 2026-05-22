@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import * as z from 'zod';
 import { useAuthStore } from '@/stores/auth-store';
 import { useRouter } from 'next/navigation';
@@ -32,7 +32,25 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
   const router = useRouter();
-  const setAuth = useAuthStore((state) => state.setAuth);
+  const { user, isHydrated, setAuth } = useAuthStore();
+
+  useEffect(() => {
+    if (isHydrated && user) {
+      switch (user.role) {
+        case 'SUPER_ADMIN':
+        case 'ADMIN':
+          router.replace('/dashboard/admin');
+          break;
+        case 'ORGANIZER':
+          router.replace('/dashboard/organizer');
+          break;
+        default:
+          router.replace('/dashboard/student');
+      }
+    }
+  }, [user, isHydrated, router]);
+
+
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [showPassword, setShowPassword] = useState(false);
@@ -114,13 +132,15 @@ export default function RegisterPage() {
       
       setAuth(user, accessToken);
       toast.success('Account created successfully!');
-      router.push('/dashboard/student');
+      router.replace('/dashboard/student');
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to register');
     } finally {
       setIsLoading(false);
     }
   };
+
+  if (!isHydrated || user) return null;
 
   return (
     <Card className="border-none shadow-none bg-transparent">

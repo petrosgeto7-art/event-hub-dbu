@@ -25,7 +25,7 @@ router.post(
     try {
       // Check if user attended the event
       const attendance = await prisma.attendance.findUnique({
-        where: { userId_eventId: { userId: req.user!.id, eventId: req.params.eventId } },
+        where: { userId_eventId: { userId: req.user!.id, eventId: (req.params.eventId as string) } },
       });
 
       if (!attendance) {
@@ -33,11 +33,11 @@ router.post(
       }
 
       const feedback = await prisma.feedback.upsert({
-        where: { userId_eventId: { userId: req.user!.id, eventId: req.params.eventId } },
+        where: { userId_eventId: { userId: req.user!.id, eventId: (req.params.eventId as string) } },
         update: { rating: req.body.rating, comment: req.body.comment },
         create: {
           userId: req.user!.id,
-          eventId: req.params.eventId,
+          eventId: (req.params.eventId as string),
           rating: req.body.rating,
           comment: req.body.comment,
         },
@@ -59,7 +59,7 @@ router.get(
 
       const [feedback, total, stats] = await Promise.all([
         prisma.feedback.findMany({
-          where: { eventId: req.params.eventId },
+          where: { eventId: (req.params.eventId as string) },
           include: {
             user: { select: { id: true, firstName: true, lastName: true, avatar: true } },
           },
@@ -67,9 +67,9 @@ router.get(
           skip,
           take: limit,
         }),
-        prisma.feedback.count({ where: { eventId: req.params.eventId } }),
+        prisma.feedback.count({ where: { eventId: (req.params.eventId as string) } }),
         prisma.feedback.aggregate({
-          where: { eventId: req.params.eventId },
+          where: { eventId: (req.params.eventId as string) },
           _avg: { rating: true },
           _count: { rating: true },
         }),
@@ -88,7 +88,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const stats = await prisma.feedback.aggregate({
-        where: { eventId: req.params.eventId },
+        where: { eventId: (req.params.eventId as string) },
         _avg: { rating: true },
         _count: { rating: true },
         _min: { rating: true },
@@ -98,16 +98,16 @@ router.get(
       // Rating distribution
       const distribution = await prisma.feedback.groupBy({
         by: ['rating'],
-        where: { eventId: req.params.eventId },
+        where: { eventId: (req.params.eventId as string) },
         _count: { rating: true },
       });
 
       sendSuccess(res, {
-        averageRating: stats._avg.rating ? Math.round(stats._avg.rating * 10) / 10 : 0,
-        totalReviews: stats._count.rating,
+        averageRating: (stats._avg as any).rating ? Math.round((stats._avg as any).rating * 10) / 10 : 0,
+        totalReviews: (stats._count as any).rating,
         distribution: distribution.map((d) => ({
           rating: d.rating,
-          count: d._count.rating,
+          count: (d._count as any).rating,
         })),
       });
     } catch (error) {

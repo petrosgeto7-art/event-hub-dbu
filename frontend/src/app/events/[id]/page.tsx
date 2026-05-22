@@ -160,19 +160,6 @@ export default function EventDetailPage() {
       const res = await api.post(`/events/${params.id}/register`);
       return res.data;
     },
-    onSuccess: (data) => {
-      if (data.data?.checkoutUrl) {
-        window.location.href = data.data.checkoutUrl;
-      } else {
-        toast.success('Successfully registered for the event!');
-        queryClient.invalidateQueries({ queryKey: ['registration', params.id] });
-        queryClient.invalidateQueries({ queryKey: ['event', params.id] });
-      }
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to register');
-    },
-    onSettled: () => setIsRegistering(false)
   });
 
   const cancelMutation = useMutation({
@@ -200,10 +187,26 @@ export default function EventDetailPage() {
   };
 
   const handleCheckout = (quantities: Record<string, number>) => {
-    // In a full implementation, we'd pass quantities and tier IDs.
-    // For now, trigger the existing single registration flow.
     setIsRegistering(true);
-    registerMutation.mutate();
+    registerMutation.mutate(undefined, {
+      onSuccess: (data) => {
+        const result = data.data;
+        if (result?.checkoutUrl) {
+          // Paid event — redirect to Chapa hosted checkout
+          window.location.href = result.checkoutUrl;
+        } else {
+          // Free event — already registered
+          toast.success('Successfully registered for the event!');
+          setIsTicketModalOpen(false);
+          queryClient.invalidateQueries({ queryKey: ['registration', params.id] });
+          queryClient.invalidateQueries({ queryKey: ['event', params.id] });
+        }
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.message || 'Failed to register');
+      },
+      onSettled: () => setIsRegistering(false),
+    });
   };
 
   const handleCancel = () => {
@@ -248,9 +251,28 @@ export default function EventDetailPage() {
     );
   }
 
-  const isFull = event.registeredCount >= event.capacity;
-  const isPast = new Date(event.date) < new Date();
-  const isOrganizer = user?.id === event.organizer.id;
+  const isFull = event.capacity ? event.registeredCount >= event.capacity : false;
+  
+  // Calculate exact start and end times
+  const startDateTime = new Date(event.date);
+  if (event.startTime && event.startTime.includes(':')) {
+    const [hours, minutes] = event.startTime.split(':');
+    startDateTime.setHours(parseInt(hours, 10) || 0, parseInt(minutes, 10) || 0, 0, 0);
+  }
+  
+  const endDateTime = new Date(event.date);
+  if (event.endTime && event.endTime.includes(':')) {
+    const [hours, minutes] = event.endTime.split(':');
+    endDateTime.setHours(parseInt(hours, 10) || 23, parseInt(minutes, 10) || 59, 0, 0);
+  } else {
+    endDateTime.setHours(23, 59, 59, 999);
+  }
+
+  const now = new Date();
+  const hasStarted = startDateTime <= now;
+  const isPast = endDateTime < now;
+  const isLive = hasStarted && !isPast;
+  const isOrganizer = user?.id === event?.organizer?.id;
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -297,6 +319,12 @@ export default function EventDetailPage() {
                 <Badge variant="outline" className="bg-black/50 backdrop-blur-md text-white border-white/20">
                   {event.status}
                 </Badge>
+                {isLive && (
+                  <Badge className="bg-red-500 text-white animate-pulse">
+                    <span className="w-2 h-2 rounded-full bg-white mr-2 animate-ping" />
+                    Happening Now
+                  </Badge>
+                )}
               </div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white mb-4">
                 {event.title}
@@ -458,7 +486,7 @@ export default function EventDetailPage() {
                       <div>
                         <p className="text-sm text-muted-foreground">Capacity</p>
                         <p className="font-medium">
-                          {event.registeredCount} / {event.capacity} seats filled
+                          {event.registeredCount} / {event.capacity || '∞'} seats filled
                         </p>
                       </div>
                     </div>
@@ -480,27 +508,54 @@ export default function EventDetailPage() {
 
                   {/* Call to Action Button */}
                   {isOrganizer ? (
-                    <Button className="w-full h-14 text-lg font-bold" variant="outline" onClick={() => router.push(`/dashboard/organizer/events/${event.id}`)}>
-                      Manage Event
+                    <Button className="w-full h-14 text-lg font-bold bg-primary hover:bg-primary/90 text-black" onClick={() => router.push(`/dashboard/organizer/events/${event.id}`)}>
+                      Manage Event →
                     </Button>
+                  ) : userRegistration ? (
+                    userRegistration.paymentStatus === 'PENDING' ? (
+                      <div className="space-y-3">
+                        <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500 flex items-center justify-center gap-2 font-bold text-base">
+                          ⚠️ Payment Pending
+                        </div>
+                        <Button 
+                          className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white font-bold" 
+                          onClick={() => handleCheckout({})}
+                          disabled={isRegistering}
+                        >
+                          {isRegistering ? 'Processing...' : 'Complete Payment'}
+                        </Button>
+                        <Button 
+                          className="w-full h-12" 
+                          variant="destructive" 
+                          onClick={handleCancel}
+                          disabled={cancelMutation.isPending}
+                        >
+                          Cancel Registration
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-500 flex items-center justify-center gap-2 font-bold text-base">
+                          <Ticket className="w-5 h-5" /> You are registered!
+                        </div>
+                        <Button 
+                          className="w-full h-12" 
+                          variant="destructive" 
+                          onClick={handleCancel}
+                          disabled={cancelMutation.isPending}
+                        >
+                          Cancel Registration
+                        </Button>
+                      </div>
+                    )
                   ) : isPast ? (
                     <Button className="w-full h-14 text-lg font-bold" variant="secondary" disabled>
                       Event has ended
                     </Button>
-                  ) : userRegistration ? (
-                    <div className="space-y-3">
-                      <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-500 flex items-center justify-center gap-2 font-bold text-base">
-                        <Ticket className="w-5 h-5" /> You are registered!
-                      </div>
-                      <Button 
-                        className="w-full h-12" 
-                        variant="destructive" 
-                        onClick={handleCancel}
-                        disabled={cancelMutation.isPending}
-                      >
-                        Cancel Registration
-                      </Button>
-                    </div>
+                  ) : hasStarted ? (
+                    <Button className="w-full h-14 text-lg font-bold bg-muted text-muted-foreground" disabled>
+                      Registration Closed (Event Started)
+                    </Button>
                   ) : (
                     <Button 
                       className={`w-full h-14 text-lg font-bold ${isFull ? 'bg-orange-500 hover:bg-orange-600' : 'bg-primary hover:bg-primary/90'} text-white shadow-[0_0_30px_rgba(255,215,0,0.2)] hover:shadow-[0_0_40px_rgba(255,215,0,0.3)] transition-all hover:-translate-y-1`}

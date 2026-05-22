@@ -227,7 +227,7 @@ export default function OrganizerDashboard() {
                         </td>
                         <td className="px-6 py-4">
                           <Link href={`/dashboard/organizer/events/${evt.id}`}>
-                            <Button variant="ghost" size="sm" className="h-8 hover:text-primary">
+                            <Button variant="ghost" size="sm" className="h-8 text-primary hover:bg-primary/20 hover:text-primary font-bold">
                               Manage <ChevronRight className="w-4 h-4 ml-1" />
                             </Button>
                           </Link>
@@ -274,7 +274,7 @@ export default function OrganizerDashboard() {
                 </div>
               </Link>
               
-              <Link href="#" className="block">
+              <Link href="/dashboard/organizer/events" className="block">
                 <div className="flex items-center gap-3 p-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/5 transition-all">
                   <div className="w-10 h-10 rounded-lg bg-green-400/20 flex items-center justify-center text-green-400">
                     <FileText className="w-5 h-5" />

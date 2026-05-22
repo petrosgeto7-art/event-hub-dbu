@@ -11,9 +11,9 @@ export class AuthController {
       res.cookie('refreshToken', result.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        path: '/api/auth',
+        path: '/',
       });
 
       sendSuccess(res, {
@@ -32,9 +32,9 @@ export class AuthController {
       res.cookie('refreshToken', result.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: '/api/auth',
+        path: '/',
       });
 
       sendSuccess(res, {
@@ -58,9 +58,9 @@ export class AuthController {
       res.cookie('refreshToken', tokens.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: '/api/auth',
+        path: '/',
       });
 
       sendSuccess(res, { accessToken: tokens.accessToken });
@@ -76,7 +76,7 @@ export class AuthController {
         await authService.logout(token);
       }
 
-      res.clearCookie('refreshToken', { path: '/api/auth' });
+      res.clearCookie('refreshToken', { path: '/' });
       sendSuccess(res, { message: 'Logged out successfully' });
     } catch (error) {
       next(error);

@@ -174,7 +174,7 @@ export function Navbar() {
                 size="icon"
                 onClick={() => {
                   logout();
-                  router.push('/');
+                  router.replace('/');
                 }}
                 className="text-foreground/90 hover:text-destructive hover:bg-destructive/10"
                 title="Log Out"
@@ -184,7 +184,7 @@ export function Navbar() {
             </div>
           ) : (
             <div className="flex items-center gap-3">
-              <Link href="/login">
+              <Link href="/login" replace>
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                   <Button variant="ghost" className="hover:bg-secondary text-foreground/90 hover:text-foreground flex items-center gap-2 font-bold transition-all">
                     <LogIn className="w-4 h-4" />
@@ -317,7 +317,7 @@ export function Navbar() {
                     onClick={() => {
                       logout();
                       setIsMobileMenuOpen(false);
-                      router.push('/');
+                      router.replace('/');
                     }}
                   >
                     <LogOut className="w-5 h-5 mr-2" />
@@ -326,7 +326,7 @@ export function Navbar() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-3 mt-2">
-                  <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
+                  <Link href="/login" replace onClick={() => setIsMobileMenuOpen(false)}>
                     <Button variant="outline" className="w-full border-border text-foreground hover:bg-secondary h-12 flex justify-center items-center gap-2 text-base font-bold">
                       <LogIn className="w-5 h-5" />
                       {t('signIn')}

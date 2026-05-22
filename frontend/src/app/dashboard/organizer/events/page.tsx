@@ -8,8 +8,11 @@ import { Calendar, PlusCircle, MoreVertical, Edit2, Trash2, Eye, MapPin, Users }
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 export default function ManageEventsPage() {
+  const queryClient = useQueryClient();
   const { data: response, isLoading } = useQuery({
     queryKey: ['my-events'],
     queryFn: async () => {
@@ -17,6 +20,25 @@ export default function ManageEventsPage() {
       return res.data;
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/events/${id}`);
+    },
+    onSuccess: () => {
+      toast.success('Event deleted successfully');
+      queryClient.invalidateQueries({ queryKey: ['my-events'] });
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to delete event');
+    }
+  });
+
+  const handleDelete = (id: string) => {
+    if (confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
+      deleteMutation.mutate(id);
+    }
+  };
 
   const events = response?.data || [];
 
@@ -69,9 +91,9 @@ export default function ManageEventsPage() {
                   <img 
                     src={event.coverImage || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=2070'} 
                     alt={event.title}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-md text-xs font-semibold text-white border border-white/10">
+                  <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-md text-xs font-semibold text-white border border-white/10 z-10">
                     {event.status}
                   </div>
                 </div>
@@ -80,17 +102,15 @@ export default function ManageEventsPage() {
                 <div className="flex-1 p-5 flex flex-col">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <h3 className="font-bold text-lg leading-tight line-clamp-1">{event.title}</h3>
+                      <h3 className="font-bold text-lg leading-tight line-clamp-1 break-all">{event.title}</h3>
                       <p className="text-sm text-primary mt-1">
                         {format(new Date(event.date), 'MMM d, yyyy • h:mm a')}
                       </p>
                     </div>
                     
                     <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white -mr-2">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
+                      <DropdownMenuTrigger className="h-8 w-8 p-0 flex items-center justify-center rounded-md text-muted-foreground hover:text-white hover:bg-white/10 outline-none transition-colors -mr-2">
+                        <MoreVertical className="w-4 h-4" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-40 bg-black/90 backdrop-blur-xl border-white/10 text-white">
                         <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
@@ -98,17 +118,22 @@ export default function ManageEventsPage() {
                             <Eye className="w-4 h-4 mr-2" /> View Public
                           </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="hover:bg-white/10 cursor-pointer">
-                          <Edit2 className="w-4 h-4 mr-2" /> Edit Event
+                        <DropdownMenuItem className="hover:bg-primary/20 cursor-pointer text-white hover:text-primary">
+                          <Link href={`/dashboard/organizer/events/${event.id}`} className="flex items-center w-full">
+                            <Edit2 className="w-4 h-4 mr-2" /> Manage Event
+                          </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive hover:bg-destructive/20 cursor-pointer">
+                        <DropdownMenuItem 
+                          className="text-destructive hover:bg-destructive/20 cursor-pointer"
+                          onClick={() => handleDelete(event.id)}
+                        >
                           <Trash2 className="w-4 h-4 mr-2" /> Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
 
-                  <p className="text-sm text-muted-foreground line-clamp-2 flex-1 mb-4">
+                  <p className="text-sm text-muted-foreground line-clamp-2 flex-1 mb-4 break-all">
                     {event.description}
                   </p>
 
@@ -116,7 +141,7 @@ export default function ManageEventsPage() {
                     <div className="flex items-center text-muted-foreground gap-1.5">
                       <MapPin className="w-4 h-4" />
                       <span className="truncate max-w-[120px]">
-                        {event.venue || 'TBA'}
+                        {event.isOnline ? 'Online' : event.location || 'TBA'}
                       </span>
                     </div>
                     <div className="flex items-center text-muted-foreground gap-1.5">
@@ -124,6 +149,12 @@ export default function ManageEventsPage() {
                       <span>{event.registeredCount || 0} / {event.capacity || '∞'}</span>
                     </div>
                   </div>
+                  
+                  <Link href={`/dashboard/organizer/events/${event.id}`} className="mt-auto pt-4">
+                    <Button className="w-full bg-primary hover:bg-primary/90 text-black font-bold h-11 text-base">
+                      Manage Event →
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </Card>
