@@ -14,6 +14,8 @@ export function CommandPalette() {
   const [results, setResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [isAskingAi, setIsAskingAi] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -37,6 +39,8 @@ export function CommandPalette() {
       setDebouncedQuery('');
       setResults([]);
       setSelectedIndex(0);
+      setAiResponse(null);
+      setIsAskingAi(false);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen]);
@@ -109,6 +113,22 @@ export function CommandPalette() {
         // No results found — go to discover page with the search
         navigateToDiscover(searchQuery);
       }
+    }
+  };
+
+  const handleAskAi = async () => {
+    if (!searchQuery) return;
+    setIsAskingAi(true);
+    setAiResponse(null);
+    try {
+      const prompt = `You are a helpful AI assistant for EventHub DBU (Debre Berhan University). Keep your answer short (max 2 sentences). User asks: ${searchQuery}`;
+      const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}`);
+      const text = await response.text();
+      setAiResponse(text);
+    } catch (err) {
+      setAiResponse("I'm having trouble connecting to my AI brain right now. Please try again.");
+    } finally {
+      setIsAskingAi(false);
     }
   };
 
@@ -192,6 +212,22 @@ export function CommandPalette() {
                   </div>
                 ) : results.length > 0 ? (
                   <div className="p-2">
+                    {searchQuery.length >= 2 && (
+                      <div className="p-3 mb-4 bg-primary/10 border border-primary/20 rounded-xl mx-2 mt-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-bold flex items-center gap-2 text-primary">
+                            <Sparkles className="w-4 h-4" /> Ask EventHub AI
+                          </h4>
+                          {!aiResponse && !isAskingAi && (
+                            <button onClick={handleAskAi} className="text-xs bg-primary text-primary-foreground hover:bg-primary/90 px-3 py-1.5 rounded-md font-bold transition-colors">
+                              Ask
+                            </button>
+                          )}
+                        </div>
+                        {isAskingAi && <div className="mt-2 text-sm text-primary flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin"/> Thinking...</div>}
+                        {aiResponse && <div className="mt-2 text-sm text-foreground/90 leading-relaxed italic border-l-2 border-primary pl-3 py-1">{aiResponse}</div>}
+                      </div>
+                    )}
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-2 flex items-center gap-2">
                       <Search className="w-3 h-3 text-primary" /> {results.length} result{results.length !== 1 ? 's' : ''} found
                     </p>
@@ -238,6 +274,24 @@ export function CommandPalette() {
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    {searchQuery.length >= 2 && (
+                      <div className="w-full px-4 mb-8">
+                        <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-sm font-bold flex items-center gap-2 text-primary">
+                              <Sparkles className="w-4 h-4" /> Ask EventHub AI
+                            </h4>
+                            {!aiResponse && !isAskingAi && (
+                              <button onClick={handleAskAi} className="text-xs bg-primary text-primary-foreground hover:bg-primary/90 px-3 py-1.5 rounded-md font-bold transition-colors">
+                                Ask
+                              </button>
+                            )}
+                          </div>
+                          {isAskingAi && <div className="text-sm text-primary flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin"/> Thinking...</div>}
+                          {aiResponse && <div className="text-sm text-foreground/90 leading-relaxed italic border-l-2 border-primary pl-3 py-1">{aiResponse}</div>}
+                        </div>
+                      </div>
+                    )}
                     <Search className="w-10 h-10 mb-3 opacity-30" />
                     <p className="text-sm font-medium">No events found for &quot;{searchQuery}&quot;</p>
                     <p className="text-xs mt-1">Try a different keyword</p>

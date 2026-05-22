@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { toast } from 'sonner';
 
 type Registration = {
   id: string;
@@ -113,11 +114,16 @@ export default function StudentDashboard() {
   const rotate = useTransform(x, [-200, 200], [-15, 15]);
   const opacity = useTransform(x, [-200, -100, 0, 100, 200], [0, 1, 1, 1, 0]);
 
-  const handleDragEnd = (event: any, info: any, cardId: string) => {
+  const handleDragEnd = async (event: any, info: any, cardId: string) => {
     if (info.offset.x > 100) {
       // Swiped Right - "Register/Save"
+      try {
+        await api.post(`/events/${cardId}/register`);
+        toast.success('Successfully registered for the event! 🎉');
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || 'Failed to register. Maybe already registered?');
+      }
       setCards((prev) => prev.filter((c) => c.id !== cardId));
-      // In a real app, trigger a save/register API call here
     } else if (info.offset.x < -100) {
       // Swiped Left - "Dismiss"
       setCards((prev) => prev.filter((c) => c.id !== cardId));
