@@ -15,7 +15,15 @@
     "db:studio": "cd backend && npx prisma studio",
     "lint": "concurrently \"cd backend && npm run lint\" \"cd frontend && npm run lint\""
   },
-  "keywords": ["event-management", "saas", "university", "campus"],
+  "keywords": [
+    "event-management",
+    "saas",
+    "university",
+    "campus"
+  ],
   "author": "EventHub DBU",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "concurrently": "^10.0.3"
+  }
 }
