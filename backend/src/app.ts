@@ -97,13 +97,15 @@ app.use((_req, res) => {
 app.use(errorHandler);
 
 // ============================================================
-// START SERVER
+// START SERVER (only when not running as serverless on Vercel)
 // ============================================================
 
-httpServer.listen(env.PORT, () => {
-  logger.info(`🚀 EventHub API running on http://localhost:${env.PORT}`);
-  logger.info(`📡 Socket.io ready for connections`);
-  logger.info(`🌍 Environment: ${env.NODE_ENV}`);
-});
+if (!process.env.VERCEL) {
+  httpServer.listen(env.PORT, () => {
+    logger.info(`🚀 EventHub API running on http://localhost:${env.PORT}`);
+    logger.info(`📡 Socket.io ready for connections`);
+    logger.info(`🌍 Environment: ${env.NODE_ENV}`);
+  });
+}
 
 export default app;
