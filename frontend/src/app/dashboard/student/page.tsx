@@ -16,11 +16,20 @@ import {
   TrendingUp, Users, BrainCircuit
 } from 'lucide-react';
 import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 type Registration = {
   id: string;
   status: string;
+  qrCode?: string;
   event: {
     id: string;
     title: string;
@@ -185,8 +194,12 @@ export default function StudentDashboard() {
                     <Card className="bg-card border-border overflow-hidden group hover:border-primary/40 transition-colors">
                       <div className="flex flex-col md:flex-row">
                         <div className="w-full md:w-44 bg-gradient-to-br from-primary/20 to-secondary flex flex-col items-center justify-center p-6 gap-3 border-r border-border">
-                          <div className="w-20 h-20 bg-white rounded-xl p-2 shadow-lg group-hover:scale-105 transition-transform">
-                            <QrCode className="w-full h-full text-black" />
+                          <div className="w-20 h-20 bg-white rounded-xl p-2 shadow-lg group-hover:scale-105 transition-transform overflow-hidden">
+                            {next.qrCode ? (
+                              <img src={next.qrCode} alt="Ticket QR Code" className="w-full h-full object-contain mix-blend-multiply" />
+                            ) : (
+                              <QrCode className="w-full h-full text-black" />
+                            )}
                           </div>
                           <p className="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded-full">Show at Door</p>
                         </div>
@@ -463,8 +476,12 @@ export default function StudentDashboard() {
                       <Card key={reg.id} className="bg-card border-border hover:border-primary/40 transition-colors overflow-hidden group">
                         <div className="flex flex-col md:flex-row">
                           <div className="w-full md:w-40 bg-gradient-to-br from-primary/20 to-secondary flex flex-col items-center justify-center p-5 gap-2 border-r border-border">
-                            <div className="w-20 h-20 bg-white rounded-xl p-2 shadow-lg group-hover:scale-105 transition-transform">
-                              <QrCode className="w-full h-full text-black" />
+                            <div className="w-20 h-20 bg-white rounded-xl p-2 shadow-lg group-hover:scale-105 transition-transform overflow-hidden">
+                              {reg.qrCode ? (
+                                <img src={reg.qrCode} alt="Ticket QR Code" className="w-full h-full object-contain mix-blend-multiply" />
+                              ) : (
+                                <QrCode className="w-full h-full text-black" />
+                              )}
                             </div>
                             <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase">Ticket</span>
                           </div>
@@ -486,9 +503,44 @@ export default function StudentDashboard() {
                               </div>
                             </div>
                             <div className="flex justify-end">
-                              <Link href={`/events/${reg.event.id}`}>
-                                <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold">View Details</Button>
-                              </Link>
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold">View Ticket</Button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-md bg-card border-border">
+                                  <DialogHeader>
+                                    <DialogTitle className="text-foreground">Your Ticket: {reg.event.title}</DialogTitle>
+                                    <DialogDescription>
+                                      Show this QR code at the entrance to attend the event.
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="flex flex-col items-center justify-center p-6 bg-white/5 rounded-xl border border-border mt-4">
+                                    {reg.qrCode ? (
+                                      <div className="bg-white p-4 rounded-xl shadow-lg relative group">
+                                        <img src={reg.qrCode} alt="Ticket QR Code" className="w-64 h-64 object-contain mix-blend-multiply" />
+                                        <button 
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(reg.qrToken || reg.id);
+                                            import('sonner').then(m => m.toast.success('Ticket ID copied to clipboard'));
+                                          }}
+                                          className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/80 text-white text-xs px-3 py-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5"
+                                        >
+                                          Copy ID
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="w-64 h-64 flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl text-muted-foreground bg-secondary/30">
+                                        <QrCode className="w-12 h-12 mb-2 opacity-50" />
+                                        <span>No QR Code available</span>
+                                      </div>
+                                    )}
+                                    <div className="mt-6 text-center">
+                                      <p className="font-bold text-lg text-foreground">{user?.firstName || 'Student'}</p>
+                                      <p className="text-sm text-muted-foreground uppercase tracking-widest">{reg.status}</p>
+                                    </div>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
                             </div>
                           </div>
                         </div>

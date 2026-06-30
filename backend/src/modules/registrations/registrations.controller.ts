@@ -43,6 +43,15 @@ export class RegistrationsController {
     }
   }
 
+  async getRegistrationById(req: Request, res: Response, next: NextFunction) {
+    try {
+      const registration = await registrationsService.getRegistrationById(req.params.id, req.user!.id);
+      sendSuccess(res, registration);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getQrCode(req: Request, res: Response, next: NextFunction) {
     try {
       const qr = await registrationsService.getQrCode(req.params.registrationId, req.user!.id);

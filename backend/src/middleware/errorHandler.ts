@@ -8,6 +8,8 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
     return res.status(err.statusCode).json({
       success: false,
       message: err.message,
+      code: (err as any).code,
+      extra: (err as any).extra,
     });
   }
 

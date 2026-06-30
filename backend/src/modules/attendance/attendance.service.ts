@@ -1,34 +1,109 @@
 import prisma from '../../shared/prisma';
-import { BadRequestError, NotFoundError } from '../../shared/errors';
+import { AppError } from '../../shared/errors';
+
+// Custom scan error that includes a machine-readable code
+class ScanError extends AppError {
+  public code: string;
+  public extra?: Record<string, any>;
+
+  constructor(code: string, message: string, extra?: Record<string, any>) {
+    super(message, 400);
+    this.code = code;
+    this.extra = extra;
+  }
+}
 
 export class AttendanceService {
-  async scanQr(qrToken: string, scannerId: string) {
+  async scanQr(qrToken: string, scannerId: string, selectedEventId?: string) {
     // Find registration by QR token
     const registration = await prisma.registration.findUnique({
       where: { qrToken },
       include: {
-        user: { select: { id: true, firstName: true, lastName: true, email: true } },
-        event: { select: { id: true, title: true, date: true, organizerId: true } },
+        user: {
+          select: {
+            id: true, firstName: true, lastName: true,
+            email: true, studentId: true, avatar: true, department: true,
+          },
+        },
+        event: {
+          select: {
+            id: true, title: true, date: true,
+            startTime: true, endTime: true, organizerId: true,
+          },
+        },
         attendance: true,
       },
     });
 
     if (!registration) {
-      throw new NotFoundError('Invalid QR code');
+      throw new ScanError(
+        'INVALID_QR',
+        'This QR code is not recognized. It may be fake or corrupted.'
+      );
     }
 
     if (registration.status !== 'CONFIRMED') {
-      throw new BadRequestError('Registration is not confirmed');
+      throw new ScanError(
+        'NOT_CONFIRMED',
+        `This registration is currently "${registration.status}". Only confirmed tickets can be scanned.`
+      );
     }
 
-    // Check expiry
-    if (registration.qrExpiry && new Date() > registration.qrExpiry) {
-      throw new BadRequestError('QR code has expired');
+    // Check if ticket belongs to the selected event
+    if (selectedEventId && registration.eventId !== selectedEventId) {
+      throw new ScanError(
+        'WRONG_EVENT',
+        `This ticket is for a different event: "${registration.event.title}".`,
+        { ticketEventTitle: registration.event.title }
+      );
+    }
+
+    // Time-based scanning validation
+    const eventDate = new Date(registration.event.date);
+
+    // Parse startTime (e.g. "09:00")
+    const [startHour, startMinute] = registration.event.startTime.split(':').map(Number);
+    const startDateTime = new Date(eventDate);
+    startDateTime.setHours(startHour, startMinute, 0, 0);
+
+    // Allow scanning 1 hour before start
+    const scanWindowStart = new Date(startDateTime.getTime() - 60 * 60 * 1000);
+
+    // Parse endTime (e.g. "16:00")
+    const [endHour, endMinute] = registration.event.endTime.split(':').map(Number);
+    const scanWindowEnd = new Date(eventDate);
+    scanWindowEnd.setHours(endHour, endMinute, 0, 0);
+
+    const now = new Date();
+
+    if (now < scanWindowStart) {
+      const opensAt = scanWindowStart.toLocaleTimeString('en-US', {
+        hour: '2-digit', minute: '2-digit', hour12: true,
+      });
+      throw new ScanError(
+        'TOO_EARLY',
+        `Scanning is not yet available. The scan window opens at ${opensAt} (1 hour before the event starts).`,
+        { opensAt, eventStart: registration.event.startTime }
+      );
+    }
+
+    if (now > scanWindowEnd) {
+      throw new ScanError(
+        'EVENT_ENDED',
+        'This event has already ended. Ticket scanning is no longer available.'
+      );
     }
 
     // Check if already attended
     if (registration.attendance) {
-      throw new BadRequestError('Attendance already recorded');
+      throw new ScanError(
+        'ALREADY_SCANNED',
+        `${registration.user.firstName} ${registration.user.lastName} has already been checked in.`,
+        {
+          user: registration.user,
+          checkedInAt: registration.attendance.checkedInAt,
+        }
+      );
     }
 
     // Mark attendance
@@ -40,7 +115,12 @@ export class AttendanceService {
         method: 'QR_SCAN',
       },
       include: {
-        user: { select: { id: true, firstName: true, lastName: true } },
+        user: {
+          select: {
+            id: true, firstName: true, lastName: true,
+            studentId: true, avatar: true, department: true,
+          },
+        },
         event: { select: { id: true, title: true } },
       },
     });
@@ -62,7 +142,7 @@ export class AttendanceService {
       },
     });
 
-    return attendance;
+    return { ...attendance, code: 'SUCCESS' };
   }
 
   async getEventAttendance(eventId: string) {

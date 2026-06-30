@@ -11,6 +11,7 @@ import { generalLimiter } from './middleware/rateLimiter';
 import { errorHandler } from './middleware/errorHandler';
 import { initializeSocket } from './socket';
 import logger from './shared/logger';
+import { startAutoCertificateCron } from './cron/auto-certificates';
 
 // Import routes
 import authRoutes from './modules/auth/auth.routes';
@@ -33,6 +34,9 @@ const httpServer = createServer(app);
 const io = initializeSocket(httpServer);
 app.set('io', io);
 
+// Start background cron jobs
+startAutoCertificateCron();
+
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -48,7 +52,7 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: env.CORS_ORIGIN,
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],

@@ -5,7 +5,7 @@ import logger from '../shared/logger';
 export function initializeSocket(httpServer: HttpServer) {
   const io = new SocketServer(httpServer, {
     cors: {
-      origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+      origin: true,
       methods: ['GET', 'POST'],
       credentials: true,
     },

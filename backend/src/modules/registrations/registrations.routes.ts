@@ -10,6 +10,7 @@ const router = Router();
 router.post('/events/:eventId/register', authenticate, registrationsController.register);
 router.delete('/events/:eventId/register', authenticate, registrationsController.cancel);
 router.get('/my/registrations', authenticate, registrationsController.getUserRegistrations);
+router.get('/my/registrations/:id', authenticate, registrationsController.getRegistrationById);
 router.get('/registrations/:registrationId/qr', authenticate, registrationsController.getQrCode);
 
 // Organizer/Admin routes

@@ -217,6 +217,25 @@ export class RegistrationsService {
     });
   }
 
+  async getRegistrationById(id: string, userId: string) {
+    const registration = await prisma.registration.findFirst({
+      where: { id, userId, status: { not: 'CANCELLED' } },
+      include: {
+        event: {
+          select: {
+            id: true, title: true, slug: true, date: true, startTime: true,
+            endTime: true, location: true, isOnline: true, bannerImage: true,
+            status: true, category: { select: { name: true, icon: true, color: true } },
+          },
+        },
+        attendance: { select: { checkedInAt: true } },
+      },
+    });
+
+    if (!registration) throw new NotFoundError('Registration');
+    return registration;
+  }
+
   async getQrCode(registrationId: string, userId: string) {
     const registration = await prisma.registration.findFirst({
       where: { id: registrationId, userId },

@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { useAuthStore } from '@/stores/auth-store';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
@@ -10,9 +11,19 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Calendar, MapPin, ArrowRight } from 'lucide-react';
+import { Calendar, MapPin, ArrowRight, QrCode } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export default function StudentEventsPage() {
+  const { user } = useAuthStore();
   const { data: registrations, isLoading } = useQuery({
     queryKey: ['my-registrations'],
     queryFn: async () => {
@@ -107,11 +118,54 @@ export default function StudentEventsPage() {
                             </Button>
                           </Link>
                         )}
-                        <Link href={`/events/${reg.event.id}`}>
-                          <Button variant="secondary" className="bg-white/10 hover:bg-white/20">
-                            View Details <ArrowRight className="w-4 h-4 ml-2" />
-                          </Button>
-                        </Link>
+                        {reg.status === 'CONFIRMED' ? (
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="secondary" className="bg-white/10 hover:bg-white/20">
+                                View Ticket <ArrowRight className="w-4 h-4 ml-2" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-md bg-card border-border">
+                              <DialogHeader>
+                                <DialogTitle className="text-foreground">Your Ticket: {reg.event.title}</DialogTitle>
+                                <DialogDescription>
+                                  Show this QR code at the entrance to attend the event.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="flex flex-col items-center justify-center p-6 bg-white/5 rounded-xl border border-border mt-4">
+                                {reg.qrCode ? (
+                                  <div className="bg-white p-4 rounded-xl shadow-lg relative group">
+                                    <img src={reg.qrCode} alt="Ticket QR Code" className="w-64 h-64 object-contain mix-blend-multiply" />
+                                    <button 
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(reg.qrToken || reg.id);
+                                        toast.success('Ticket ID copied to clipboard');
+                                      }}
+                                      className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/80 text-white text-xs px-3 py-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5"
+                                    >
+                                      Copy ID
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="w-64 h-64 flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl text-muted-foreground bg-secondary/30">
+                                    <QrCode className="w-12 h-12 mb-2 opacity-50" />
+                                    <span>No QR Code available</span>
+                                  </div>
+                                )}
+                                <div className="mt-6 text-center">
+                                  <p className="font-bold text-lg text-foreground">{user?.firstName || 'Student'}</p>
+                                  <p className="text-sm text-muted-foreground uppercase tracking-widest">{reg.status}</p>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        ) : (
+                          <Link href={`/events/${reg.event.id}`}>
+                            <Button variant="secondary" className="bg-white/10 hover:bg-white/20">
+                              View Event <ArrowRight className="w-4 h-4 ml-2" />
+                            </Button>
+                          </Link>
+                        )}
                       </div>
                     </CardContent>
                   </div>
